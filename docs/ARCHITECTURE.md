@@ -30,7 +30,7 @@ Requisitos que guían el diseño:
                                         │  - consulta D1 para estadísticas
                          ┌──────────────┴───────────────────────────┐
   Victor (admin) ───────▶│  Raspberry Pi  (apps/admin)              │
-  admin.penginexr.com    │  Dockge stack, expuesto por cloudflared  │
+  nfc-admin.penginexr.com│  Dockge stack, túnel cloudflared propio  │
   (Cloudflare Access)    │  ├─ API + UI de administración           │
                          │  ├─ SQLite: negocios, chips, planes      │
                          │  └─ Backups → /mnt/usb                   │
@@ -73,8 +73,8 @@ Solo deja de estar disponible el panel de administración.
 
 - **Stack**: Node + Hono (API) + React/Vite (UI estática servida por Hono) + SQLite con Drizzle ORM.
   - Decidido (2026-10-21): React + Vite. Se descartó SvelteKit.
-- **Despliegue**: contenedor Docker en un stack de Dockge, expuesto como `admin.penginexr.com` vía cloudflared.
-- **Autenticación**: **Cloudflare Access** delante de `admin.penginexr.com` (login por email/OTP).
+- **Despliegue**: contenedor Docker en un stack de Dockge, expuesto como `nfc-admin.penginexr.com` vía cloudflared.
+- **Autenticación**: **Cloudflare Access** delante de `nfc-admin.penginexr.com` (login por email/OTP).
   La app no implementa login en la Fase 1; valida el header `Cf-Access-Jwt-Assertion`.
 - **Responsabilidades**:
   - CRUD de negocios, chips y landings.
@@ -93,7 +93,7 @@ Solo deja de estar disponible el panel de administración.
 ### 3.4 `infra/`
 
 - `docker-compose.yml` del admin (para pegar en Dockge).
-- Config de referencia de cloudflared (ingress `admin.penginexr.com → http://admin:3000`).
+- Config de referencia de cloudflared (túnel propio del stack: `nfc-admin.penginexr.com → http://nfc-admin:3000`).
 - `backup.sh` + timer systemd.
 - Migraciones D1 (`infra/d1/migrations/*.sql`).
 
@@ -156,7 +156,7 @@ si un negocio cancela, el stand se reasigna a otro sin reescribir nada.
 |---|---|---|
 | `go.penginexr.com/<slug>` | Worker | URL grabada en el chip (~30 bytes, cabe en NTAG213) |
 | `go.penginexr.com/<slug>?s=q` | Worker | URL del QR impreso |
-| `admin.penginexr.com` | Pi vía tunnel | Protegido por Cloudflare Access |
+| `nfc-admin.penginexr.com` | Pi vía tunnel | Protegido por Cloudflare Access |
 
 Considerar a futuro un dominio más corto y neutral (sin "penginexr") para la marca comercial.
 
