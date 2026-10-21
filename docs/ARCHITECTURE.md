@@ -224,11 +224,11 @@ nfc-platform/
 ## 9. Fases
 
 ### Fase 1 — MVP vendible
-- [ ] Monorepo base (pnpm, TS, shared).
-- [ ] Worker: redirect desde KV, registro en D1, página de fallback, `/health`.
-- [ ] Migración D1 `scans`.
-- [ ] Admin: CRUD negocios y chips, sync a KV, generación de URL + QR.
-- [ ] Docker + stack Dockge + ruta en cloudflared + Cloudflare Access.
+- [x] Monorepo base (pnpm, TS, shared).
+- [x] Worker: redirect desde KV, registro en D1, página de fallback, `/health`.
+- [x] Migración D1 `scans`.
+- [x] Admin: CRUD negocios y chips, sync a KV, generación de URL + QR. UI en React con número correlativo por chip.
+- [x] Docker + stack Dockge + ruta en cloudflared + Cloudflare Access.
 - [ ] Backup diario a `/mnt/usb`.
 
 **Criterio de listo**: crear un negocio, asignarle un chip, escanearlo y ver el escaneo en el panel — con la Pi apagada, el chip sigue redirigiendo.
