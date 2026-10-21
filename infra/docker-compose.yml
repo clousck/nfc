@@ -6,8 +6,11 @@
 # 3. Crear el directorio de datos con dueño uid 1000 (usuario `node` del contenedor):
 #      sudo mkdir -p /opt/nfc-admin/data && sudo chown 1000:1000 /opt/nfc-admin/data
 #
-# El puerto solo se publica en 127.0.0.1: el acceso externo entra por cloudflared
-# (admin.penginexr.com → http://localhost:3000) detrás de Cloudflare Access.
+# Acceso externo: el contenedor `cloudflared` ya existente (túnel con token) se une
+# a la misma red Docker y llega al panel por nombre. En el dashboard de Cloudflare,
+# el public hostname del túnel es:
+#   admin.penginexr.com → http://nfc-admin:3000   (detrás de Cloudflare Access)
+# No se publica ningún puerto en la Pi.
 
 name: nfc-admin
 
@@ -25,10 +28,16 @@ services:
     volumes:
       # La base activa vive en la SD/SSD; /mnt/usb es solo destino de backups.
       - ${NFC_DATA_DIR:-/opt/nfc-admin/data}:/data
-    ports:
-      - '127.0.0.1:3000:3000'
+    networks:
+      - tunnel
     logging:
       driver: json-file
       options:
         max-size: 10m
         max-file: '3'
+
+networks:
+  # Red del stack de cloudflared. Comprobar el nombre con `docker network ls`.
+  tunnel:
+    external: true
+    name: ${CLOUDFLARED_NETWORK:-cloudflared_default}
