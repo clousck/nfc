@@ -2,21 +2,21 @@ name = "nfc-edge"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
 
-# Ruta pública. Se activa al hacer el primer deploy (pendiente de confirmar).
-# routes = [{ pattern = "go.penginexr.com", custom_domain = true }]
+# Dominio público: Cloudflare crea el registro DNS de go.penginexr.com al desplegar.
+routes = [{ pattern = "go.penginexr.com", custom_domain = true }]
 
 [observability]
 enabled = true
 
 # KV con los registros publicados por el admin: clave <slug> → LinkRecord (JSON).
-# Reemplazar el id tras `wrangler kv namespace create LINKS`.
+# Creado con `wrangler kv namespace create LINKS`.
 [[kv_namespaces]]
 binding = "LINKS"
-id = "00000000000000000000000000000000"
+id = "df1b42020b384db6bcfe767d80ebe59d"
 
-# D1 con los escaneos. Reemplazar el id tras `wrangler d1 create nfc-scans`.
+# D1 con los escaneos. Creada con `wrangler d1 create nfc-scans`.
 [[d1_databases]]
 binding = "DB"
 database_name = "nfc-scans"
-database_id = "00000000-0000-0000-0000-000000000000"
+database_id = "c7d538b5-69cf-44d1-a370-bef14e00bfb2"
 migrations_dir = "../../infra/d1/migrations"
