@@ -4,5 +4,12 @@
     "lib": ["ES2022", "DOM"],
     "types": ["node"]
   },
-  "include": ["server", "test", "drizzle.config.ts", "tsup.config.ts"]
+  "include": [
+    "server",
+    "test",
+    "drizzle.config.ts",
+    "tsup.config.ts",
+    "vite.config.ts",
+    "vitest.config.ts"
+  ]
 }

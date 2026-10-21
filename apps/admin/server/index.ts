@@ -1,3 +1,4 @@
+import { existsSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
@@ -9,6 +10,9 @@ import { openDb } from './db/client.js';
 // Tanto en `server/index.ts` (tsx) como en `dist/index.js` (build) queda en ../drizzle.
 const migrationsFolder =
   process.env['MIGRATIONS_DIR'] ?? fileURLToPath(new URL('../drizzle', import.meta.url));
+
+// UI compilada por Vite en dist/public (solo existe tras `pnpm build`).
+const staticDir = fileURLToPath(new URL('./public', import.meta.url));
 
 const config = loadConfig();
 const { db, close } = openDb(config.databasePath, migrationsFolder);
@@ -34,6 +38,7 @@ const app = createApp({
   publicBaseUrl: config.publicBaseUrl,
   auth: config.access ? cloudflareAccess(config.access) : null,
   log: true,
+  staticDir: existsSync(staticDir) ? staticDir : null,
 });
 
 const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
