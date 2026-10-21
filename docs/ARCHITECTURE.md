@@ -72,7 +72,7 @@ Solo deja de estar disponible el panel de administración.
 ### 3.2 `apps/admin` — Panel en la Raspberry Pi
 
 - **Stack**: Node + Hono (API) + React/Vite (UI estática servida por Hono) + SQLite con Drizzle ORM.
-  - Alternativa: SvelteKit con `adapter-node` (una sola app, menos piezas; menos código compartido con el edge).
+  - Decidido (2026-10-21): React + Vite. Se descartó SvelteKit.
 - **Despliegue**: contenedor Docker en un stack de Dockge, expuesto como `admin.penginexr.com` vía cloudflared.
 - **Autenticación**: **Cloudflare Access** delante de `admin.penginexr.com` (login por email/OTP).
   La app no implementa login en la Fase 1; valida el header `Cf-Access-Jwt-Assertion`.
@@ -252,6 +252,6 @@ nfc-platform/
 ## 11. Pendientes por decidir
 
 - Nombre comercial y dominio corto.
-- React/Vite vs SvelteKit para el admin.
+- ~~React/Vite vs SvelteKit para el admin.~~ Decidido: React + Vite.
 - Precios y si el plan básico incluye estadísticas.
 - Verificar límites actuales del plan gratuito de Workers, KV y D1 antes de escalar.
