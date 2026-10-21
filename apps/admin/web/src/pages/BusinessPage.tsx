@@ -48,7 +48,8 @@ function TagRow({ tag }: { tag: Tag }) {
     <li>
       <Link to={`/chips/${tag.slug}`} className="list-item">
         <div className="truncate">
-          <strong>#{tag.number}</strong> {tag.label ?? <span className="muted">Sin etiqueta</span>}
+          <strong>#{tag.number}</strong> <code className="chip-code">{tag.slug}</code>
+          {tag.label && <span className="muted"> · {tag.label}</span>}
           <div className="muted small truncate">{tag.targetUrl ?? 'Sin destino'}</div>
         </div>
         <div className="badges">
@@ -106,7 +107,7 @@ function AddTagForm({ businessId, onAdded }: { businessId: string; onAdded: () =
           <option value="new">Crear uno nuevo</option>
           {freeTags.map((t) => (
             <option key={t.slug} value={t.slug}>
-              Del inventario: #{t.number}
+              Del inventario: #{t.number} · {t.slug}
               {t.label ? ` (${t.label})` : ''}
               {t.lockedAt ? ' · ya grabado' : ''}
             </option>

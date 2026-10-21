@@ -1,10 +1,10 @@
 import { useState, type FormEvent } from 'react';
-import { BrowserRouter, Link, NavLink, Route, Routes, useNavigate } from 'react-router';
+import { BrowserRouter, Link, Navigate, NavLink, Route, Routes, useNavigate } from 'react-router';
 import { api, ApiError } from './api';
 import { NoticeProvider, useNotices } from './notices';
 import { BusinessesPage } from './pages/BusinessesPage';
 import { BusinessPage } from './pages/BusinessPage';
-import { InventoryPage } from './pages/InventoryPage';
+import { ChipsPage } from './pages/ChipsPage';
 import { TagPage } from './pages/TagPage';
 
 export function App() {
@@ -16,7 +16,8 @@ export function App() {
           <Routes>
             <Route path="/" element={<BusinessesPage />} />
             <Route path="/negocios/:id" element={<BusinessPage />} />
-            <Route path="/inventario" element={<InventoryPage />} />
+            <Route path="/chips" element={<ChipsPage />} />
+            <Route path="/inventario" element={<Navigate to="/chips?ver=libres" replace />} />
             <Route path="/chips/:slug" element={<TagPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
@@ -56,7 +57,9 @@ function Header() {
           <NavLink to="/" end>
             Negocios
           </NavLink>
-          <NavLink to="/inventario">Chips libres</NavLink>
+          <NavLink to="/chips" end>
+            Chips
+          </NavLink>
         </nav>
         <GoToChip />
         <button type="button" className="button button-small" onClick={resync} disabled={syncing}>

@@ -21,7 +21,7 @@ export function TagPage() {
         {owner ? (
           <Link to={`/negocios/${owner.id}`}>← {owner.name}</Link>
         ) : (
-          <Link to="/inventario">← Chips libres</Link>
+          <Link to="/chips?ver=libres">← Chips libres</Link>
         )}
       </p>
       <div className="page-title">
@@ -210,7 +210,7 @@ function TagDangerZone({ tag, onChanged }: { tag: TagView; onChanged: () => void
     try {
       const result = await api.deleteTag(tag.slug);
       reportSync(result.sync, 'Chip borrado.');
-      navigate(tag.businessId ? `/negocios/${tag.businessId}` : '/inventario');
+      navigate(tag.businessId ? `/negocios/${tag.businessId}` : '/chips?ver=libres');
     } catch (err) {
       reportError(err);
     }

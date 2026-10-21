@@ -498,3 +498,56 @@ a.list-item:hover {
   padding: 0.3rem 0.6rem;
   font-size: 0.9rem;
 }
+
+/* Lista de chips */
+.tabs {
+  display: flex;
+  gap: 0.25rem;
+  margin-bottom: 0.75rem;
+  border-bottom: 1px solid var(--border);
+}
+
+.tab {
+  font: inherit;
+  background: none;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  padding: 0.5rem 0.8rem;
+  color: var(--muted);
+  cursor: pointer;
+  margin-bottom: -1px;
+}
+
+.tab-active {
+  color: var(--text);
+  font-weight: 600;
+  border-bottom-color: var(--primary);
+}
+
+.tab-count {
+  display: inline-block;
+  min-width: 1.5rem;
+  padding: 0 0.4rem;
+  border-radius: 999px;
+  background: var(--muted-bg);
+  font-size: 0.75rem;
+  text-align: center;
+}
+
+.chip-main {
+  flex: 1;
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+}
+
+.chip-main:hover strong {
+  color: var(--primary);
+}
+
+.chip-code {
+  padding: 0.05rem 0.35rem;
+  border-radius: 4px;
+  background: var(--muted-bg);
+  color: var(--muted);
+}
