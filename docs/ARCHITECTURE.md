@@ -233,7 +233,7 @@ nfc-platform/
 - [x] Docker + stack Dockge + ruta en cloudflared + Cloudflare Access.
 - [x] Backup diario a `/mnt/usb` (`/mnt/usb/backups/nfc-admin`, timer systemd 03:00).
 
-**Criterio de listo**: crear un negocio, asignarle un chip, escanearlo y ver el escaneo en el panel — con la Pi apagada, el chip sigue redirigiendo.
+**Criterio de listo** ✅ (cumplido el 2026-10-21): crear un negocio, asignarle un chip, escanearlo y ver el escaneo en el panel — con la Pi apagada, el chip sigue redirigiendo.
 
 ### Fase 2 — Estadísticas y escritura de chips
 - [ ] Panel de estadísticas por negocio (por día, hora, NFC vs QR, iOS vs Android).
