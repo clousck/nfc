@@ -231,7 +231,7 @@ nfc-platform/
 - [x] Migración D1 `scans`.
 - [x] Admin: CRUD negocios y chips, sync a KV, generación de URL + QR. UI en React con número correlativo por chip.
 - [x] Docker + stack Dockge + ruta en cloudflared + Cloudflare Access.
-- [ ] Backup diario a `/mnt/usb`.
+- [x] Backup diario a `/mnt/usb` (`/mnt/usb/backups/nfc-admin`, timer systemd 03:00).
 
 **Criterio de listo**: crear un negocio, asignarle un chip, escanearlo y ver el escaneo en el panel — con la Pi apagada, el chip sigue redirigiendo.
 
