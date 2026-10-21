@@ -1,0 +1,22 @@
+name = "nfc-edge"
+main = "src/index.ts"
+compatibility_date = "2026-10-01"
+
+# Ruta pública. Se activa al hacer el primer deploy (pendiente de confirmar).
+# routes = [{ pattern = "go.penginexr.com", custom_domain = true }]
+
+[observability]
+enabled = true
+
+# KV con los registros publicados por el admin: clave <slug> → LinkRecord (JSON).
+# Reemplazar el id tras `wrangler kv namespace create LINKS`.
+[[kv_namespaces]]
+binding = "LINKS"
+id = "00000000000000000000000000000000"
+
+# D1 con los escaneos. Reemplazar el id tras `wrangler d1 create nfc-scans`.
+[[d1_databases]]
+binding = "DB"
+database_name = "nfc-scans"
+database_id = "00000000-0000-0000-0000-000000000000"
+migrations_dir = "../../infra/d1/migrations"
