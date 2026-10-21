@@ -246,6 +246,93 @@ describe('número de chip', () => {
   });
 });
 
+describe('escaneos', () => {
+  interface Stats {
+    since: number | null;
+    total: number;
+    nfc: number;
+    qr: number;
+    ios: number;
+    android: number;
+    other: number;
+    bots: number;
+    lastAt: number | null;
+    recent: Array<{ ts: number; source: string; os: string; city: string }>;
+  }
+
+  it('resume los escaneos del chip sin contar bots', async () => {
+    const business = await createBusiness();
+    const tag = await createTag({ businessId: business.id, targetUrl: 'https://a.example.com' });
+    const t0 = Date.now();
+    ctx.scans.add({ slug: tag.slug, ts: t0 + 1, source: 'nfc', os: 'ios' });
+    ctx.scans.add({ slug: tag.slug, ts: t0 + 2, source: 'qr', os: 'android', city: 'Quito' });
+    ctx.scans.add({ slug: tag.slug, ts: t0 + 3, source: 'nfc', os: 'other' });
+    ctx.scans.add({ slug: tag.slug, ts: t0 + 4, isBot: true });
+    ctx.scans.add({ slug: 'otroChp', ts: t0 + 5 });
+
+    const res = await ctx.json<Stats>('GET', `/api/tags/${tag.slug}/scans`);
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      total: 3,
+      nfc: 2,
+      qr: 1,
+      ios: 1,
+      android: 1,
+      other: 1,
+      bots: 1,
+      lastAt: t0 + 3,
+    });
+    expect(res.body.recent.map((s) => s.ts)).toEqual([t0 + 3, t0 + 2, t0 + 1]);
+    expect(res.body.recent[1]).toMatchObject({ source: 'qr', os: 'android', city: 'Quito' });
+  });
+
+  it('un chip sin escaneos devuelve ceros', async () => {
+    const tag = await createTag();
+    const res = await ctx.json<Stats>('GET', `/api/tags/${tag.slug}/scans`);
+    expect(res.body).toMatchObject({ total: 0, nfc: 0, qr: 0, bots: 0, lastAt: null, recent: [] });
+  });
+
+  it('al reasignar el chip, el nuevo negocio no ve escaneos anteriores', async () => {
+    const first = await createBusiness('Negocio A');
+    const second = await createBusiness('Negocio B');
+    const tag = await createTag({ businessId: first.id, targetUrl: 'https://a.example.com' });
+    ctx.scans.add({ slug: tag.slug, ts: Date.now() - 1000 });
+
+    const before = await ctx.json<Stats>('GET', `/api/tags/${tag.slug}/scans`);
+    expect(before.body.total).toBe(0); // escaneo previo a la asignación
+
+    await new Promise((r) => setTimeout(r, 5));
+    const patched = await ctx.json<TagBody & { assignedAt: number }>(
+      'PATCH',
+      `/api/tags/${tag.slug}`,
+      { businessId: second.id },
+    );
+    ctx.scans.add({ slug: tag.slug, ts: patched.body.assignedAt + 1 });
+
+    const after = await ctx.json<Stats>('GET', `/api/tags/${tag.slug}/scans`);
+    expect(after.body.since).toBe(patched.body.assignedAt);
+    expect(after.body.total).toBe(1);
+  });
+
+  it('editar otros campos no reinicia el conteo', async () => {
+    const business = await createBusiness();
+    const tag = await createTag({ businessId: business.id, targetUrl: 'https://a.example.com' });
+    const original = await ctx.json<{ assignedAt: number }>('GET', `/api/tags/${tag.slug}`);
+    await ctx.json('PATCH', `/api/tags/${tag.slug}`, { label: 'Mesa 1', businessId: business.id });
+    const updated = await ctx.json<{ assignedAt: number }>('GET', `/api/tags/${tag.slug}`);
+    expect(updated.body.assignedAt).toBe(original.body.assignedAt);
+  });
+
+  it('si D1 falla responde 502 con el motivo', async () => {
+    const tag = await createTag();
+    ctx.scans.failing = true;
+    const res = await ctx.json('GET', `/api/tags/${tag.slug}/scans`);
+    expect(res.status).toBe(502);
+    expect(String(res.body['message'])).toContain('D1 caída');
+  });
+});
+
 describe('QR', () => {
   it('genera SVG con la URL de QR', async () => {
     const tag = await createTag();

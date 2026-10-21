@@ -24,7 +24,7 @@ describe('loadConfig', () => {
         CF_API_TOKEN: 't',
         CF_KV_LINKS_NAMESPACE_ID: 'n',
       }).cloudflare,
-    ).toEqual({ accountId: 'a', apiToken: 't', kvLinksNamespaceId: 'n' });
+    ).toEqual({ accountId: 'a', apiToken: 't', kvLinksNamespaceId: 'n', d1DatabaseId: null });
   });
 
   it('rechaza PUBLIC_BASE_URL sin https', () => {

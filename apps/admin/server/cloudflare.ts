@@ -41,16 +41,18 @@ function chunk<T>(items: readonly T[], size: number): T[][] {
   return out;
 }
 
-/** Cliente mínimo de la API REST de Workers KV (token con `Workers KV Storage:Edit`). */
-export function createCloudflareKv(options: CloudflareKvOptions): LinkStore {
-  const doFetch = options.fetch ?? fetch;
-  const base = `${API_BASE}/accounts/${encodeURIComponent(options.accountId)}/storage/kv/namespaces/${encodeURIComponent(options.namespaceId)}`;
+type ApiCall = <T>(method: string, path: string, body?: unknown) => Promise<ApiEnvelope<T>>;
 
-  async function call<T>(method: string, path: string, body?: unknown): Promise<ApiEnvelope<T>> {
+function createApiCall(base: string, apiToken: string, doFetch: typeof fetch): ApiCall {
+  return async function call<T>(
+    method: string,
+    path: string,
+    body?: unknown,
+  ): Promise<ApiEnvelope<T>> {
     const response = await doFetch(`${base}${path}`, {
       method,
       headers: {
-        authorization: `Bearer ${options.apiToken}`,
+        authorization: `Bearer ${apiToken}`,
         ...(body === undefined ? {} : { 'content-type': 'application/json' }),
       },
       ...(body === undefined ? {} : { body: JSON.stringify(body) }),
@@ -70,7 +72,16 @@ export function createCloudflareKv(options: CloudflareKvOptions): LinkStore {
       );
     }
     return envelope;
-  }
+  };
+}
+
+/** Cliente mínimo de la API REST de Workers KV (token con `Workers KV Storage:Edit`). */
+export function createCloudflareKv(options: CloudflareKvOptions): LinkStore {
+  const call = createApiCall(
+    `${API_BASE}/accounts/${encodeURIComponent(options.accountId)}/storage/kv/namespaces/${encodeURIComponent(options.namespaceId)}`,
+    options.apiToken,
+    options.fetch ?? fetch,
+  );
 
   return {
     async putMany(entries) {
@@ -100,6 +111,36 @@ export function createCloudflareKv(options: CloudflareKvOptions): LinkStore {
         cursor = page.result_info?.cursor || undefined;
       } while (cursor);
       return slugs;
+    },
+  };
+}
+
+/** Consultas de solo lectura a la base D1 de escaneos (token con `D1:Read`). */
+export interface ScanStore {
+  query<T>(sql: string, params?: ReadonlyArray<string | number>): Promise<T[]>;
+}
+
+interface CloudflareD1Options {
+  accountId: string;
+  apiToken: string;
+  databaseId: string;
+  fetch?: typeof fetch;
+}
+
+export function createCloudflareD1(options: CloudflareD1Options): ScanStore {
+  const call = createApiCall(
+    `${API_BASE}/accounts/${encodeURIComponent(options.accountId)}/d1/database/${encodeURIComponent(options.databaseId)}`,
+    options.apiToken,
+    options.fetch ?? fetch,
+  );
+
+  return {
+    async query<T>(sql: string, params: ReadonlyArray<string | number> = []) {
+      const envelope = await call<Array<{ results: T[]; success: boolean }>>('POST', '/query', {
+        sql,
+        params,
+      });
+      return envelope.result[0]?.results ?? [];
     },
   };
 }

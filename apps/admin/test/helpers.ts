@@ -1,12 +1,56 @@
+import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import Database from 'better-sqlite3';
 import type { LinkRecord } from '@nfc/shared';
 import type { MiddlewareHandler } from 'hono';
 import { createApp } from '../server/app.js';
-import type { LinkStore } from '../server/cloudflare.js';
+import type { LinkStore, ScanStore } from '../server/cloudflare.js';
 import type { AppEnv } from '../server/context.js';
 import { openDb } from '../server/db/client.js';
 
 const migrationsFolder = fileURLToPath(new URL('../drizzle', import.meta.url));
+const d1Migration = readFileSync(
+  new URL('../../../infra/d1/migrations/0001_create_scans.sql', import.meta.url),
+  'utf8',
+);
+
+/** D1 simulada: ejecuta el mismo SQL sobre SQLite en memoria con la migración real. */
+export class FakeScanStore implements ScanStore {
+  readonly sqlite = new Database(':memory:');
+  failing = false;
+
+  constructor() {
+    this.sqlite.exec(d1Migration);
+  }
+
+  async query<T>(sql: string, params: ReadonlyArray<string | number> = []): Promise<T[]> {
+    if (this.failing) throw new Error('D1 caída');
+    return this.sqlite.prepare(sql).all(...params) as T[];
+  }
+
+  add(scan: {
+    slug: string;
+    ts: number;
+    source?: 'nfc' | 'qr';
+    os?: 'ios' | 'android' | 'other';
+    city?: string;
+    isBot?: boolean;
+  }) {
+    this.sqlite
+      .prepare(
+        'INSERT INTO scans (slug, ts, source, os, country, city, is_bot) VALUES (?, ?, ?, ?, ?, ?, ?)',
+      )
+      .run(
+        scan.slug,
+        scan.ts,
+        scan.source ?? 'nfc',
+        scan.os ?? 'ios',
+        'EC',
+        scan.city ?? 'Ibarra',
+        scan.isBot ? 1 : 0,
+      );
+  }
+}
 
 /** KV en memoria; `failing = true` simula una caída de la API de Cloudflare. */
 export class FakeLinkStore implements LinkStore {
@@ -36,9 +80,11 @@ export class FakeLinkStore implements LinkStore {
 export function setup(auth: MiddlewareHandler<AppEnv> | null = null) {
   const { db, close } = openDb(':memory:', migrationsFolder);
   const store = new FakeLinkStore();
+  const scans = new FakeScanStore();
   const app = createApp({
     db,
     linkStore: store,
+    scanStore: scans,
     publicBaseUrl: 'https://go.penginexr.com',
     auth,
   });
@@ -59,5 +105,16 @@ export function setup(auth: MiddlewareHandler<AppEnv> | null = null) {
     return { status: res.status, body: (await res.json()) as T };
   }
 
-  return { app, db, close, store, request, json };
+  return {
+    app,
+    db,
+    close: () => {
+      close();
+      scans.sqlite.close();
+    },
+    store,
+    scans,
+    request,
+    json,
+  };
 }

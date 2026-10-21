@@ -12,6 +12,25 @@ export interface TagView extends Tag {
 
 export type BusinessDetail = Business & { tags: Tag[] };
 
+export interface TagScanStats {
+  since: number | null;
+  total: number;
+  nfc: number;
+  qr: number;
+  ios: number;
+  android: number;
+  other: number;
+  bots: number;
+  lastAt: number | null;
+  recent: Array<{
+    ts: number;
+    source: 'nfc' | 'qr';
+    os: 'ios' | 'android' | 'other' | null;
+    country: string | null;
+    city: string | null;
+  }>;
+}
+
 export type BusinessInput = Partial<
   Pick<Business, 'name' | 'contactName' | 'phone' | 'plan' | 'status' | 'notes'>
 >;
@@ -100,6 +119,7 @@ export const api = {
   },
   getTag: (slug: string) => request<TagView>('GET', `/api/tags/${slug}`),
   getTagByNumber: (number: number) => request<TagView>('GET', `/api/tags/number/${number}`),
+  getTagScans: (slug: string) => request<TagScanStats>('GET', `/api/tags/${slug}/scans`),
   createTag: (input: TagInput) => request<TagView>('POST', '/api/tags', input),
   updateTag: (slug: string, input: TagInput) =>
     request<TagView>('PATCH', `/api/tags/${slug}`, input),

@@ -29,7 +29,13 @@ export interface Config {
   port: number;
   databasePath: string;
   publicBaseUrl: string;
-  cloudflare: { accountId: string; apiToken: string; kvLinksNamespaceId: string } | null;
+  cloudflare: {
+    accountId: string;
+    apiToken: string;
+    kvLinksNamespaceId: string;
+    /** Opcional: sin él, el panel no muestra escaneos. */
+    d1DatabaseId: string | null;
+  } | null;
   access: { teamDomain: string; aud: string } | null;
 }
 
@@ -46,6 +52,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
           accountId: e.CF_ACCOUNT_ID,
           apiToken: e.CF_API_TOKEN,
           kvLinksNamespaceId: e.CF_KV_LINKS_NAMESPACE_ID,
+          d1DatabaseId: e.CF_D1_DATABASE_ID ?? null,
         }
       : null;
 

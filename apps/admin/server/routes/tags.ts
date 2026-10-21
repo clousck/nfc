@@ -4,6 +4,7 @@ import { Hono } from 'hono';
 import QRCode from 'qrcode';
 import { businesses, tagCounter, tags, type Tag } from '../db/schema.js';
 import type { AppDeps, AppEnv } from '../context.js';
+import { getTagScanStats } from '../scans.js';
 import { syncTags, toLinkRecord, unpublishTag } from '../sync.js';
 import { QrQuery, TagCreate, TagListQuery, TagUpdate, validate } from '../validation.js';
 
@@ -18,7 +19,7 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
-export function tagRoutes({ db, linkStore, publicBaseUrl }: AppDeps) {
+export function tagRoutes({ db, linkStore, scanStore, publicBaseUrl }: AppDeps) {
   const app = new Hono<AppEnv>();
 
   const present = (tag: Tag) => ({ ...tag, urls: buildTagUrls(publicBaseUrl, tag.slug) });
@@ -72,7 +73,13 @@ export function tagRoutes({ db, linkStore, publicBaseUrl }: AppDeps) {
             .get();
           return tx
             .insert(tags)
-            .values({ ...body, slug: generateSlug(), number: counter.last, createdAt: Date.now() })
+            .values({
+              ...body,
+              slug: generateSlug(),
+              number: counter.last,
+              assignedAt: body.businessId ? Date.now() : null,
+              createdAt: Date.now(),
+            })
             .returning()
             .get();
         });
@@ -106,17 +113,48 @@ export function tagRoutes({ db, linkStore, publicBaseUrl }: AppDeps) {
   app.patch('/:slug', validate('json', TagUpdate), async (c) => {
     const slug = c.req.param('slug');
     const body = c.req.valid('json');
-    if (!findTag(slug)) return c.json({ error: 'not_found' }, 404);
+    const current = findTag(slug);
+    if (!current) return c.json({ error: 'not_found' }, 404);
     if (body.businessId && !businessExists(body.businessId)) {
       return c.json({ error: 'business_not_found' }, 422);
     }
-    if (Object.keys(body).length > 0) {
-      db.update(tags).set(body).where(eq(tags.slug, slug)).run();
+    // Al cambiar de negocio, las estadísticas empiezan de cero para el nuevo.
+    const reassigned = body.businessId !== undefined && body.businessId !== current.businessId;
+    const changes = reassigned
+      ? { ...body, assignedAt: body.businessId ? Date.now() : null }
+      : body;
+    if (Object.keys(changes).length > 0) {
+      db.update(tags).set(changes).where(eq(tags.slug, slug)).run();
     }
     const sync = await syncTags(db, linkStore, [slug]);
     const tag = findTag(slug);
     if (!tag) return c.json({ error: 'not_found' }, 404);
     return c.json({ ...present(tag), published: isPublished(tag), sync });
+  });
+
+  app.get('/:slug/scans', async (c) => {
+    const tag = findTag(c.req.param('slug'));
+    if (!tag) return c.json({ error: 'not_found' }, 404);
+    if (!scanStore) {
+      return c.json(
+        {
+          error: 'scans_unavailable',
+          message: 'Las estadísticas no están configuradas (CF_D1_DATABASE_ID).',
+        },
+        503,
+      );
+    }
+    try {
+      return c.json(await getTagScanStats(scanStore, tag.slug, tag.assignedAt));
+    } catch (err) {
+      return c.json(
+        {
+          error: 'scans_failed',
+          message: `No se pudieron leer los escaneos de Cloudflare: ${err instanceof Error ? err.message : String(err)}`,
+        },
+        502,
+      );
+    }
   });
 
   /** Marca el chip físico como bloqueado (tras escribirlo y hacer makeReadOnly). */

@@ -16,6 +16,7 @@ const { db, close } = openDb(':memory:', fileURLToPath(new URL('../drizzle', imp
 const app = createApp({
   db,
   linkStore: new FakeLinkStore(),
+  scanStore: null,
   publicBaseUrl: 'https://go.penginexr.com',
   auth: null,
   staticDir: dir,

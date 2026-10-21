@@ -1,0 +1,1 @@
+ALTER TABLE `tags` ADD `assigned_at` integer;

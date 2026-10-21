@@ -3,7 +3,11 @@ import { fileURLToPath } from 'node:url';
 import { serve } from '@hono/node-server';
 import { createApp } from './app.js';
 import { cloudflareAccess } from './auth.js';
-import { createCloudflareKv, createUnconfiguredLinkStore } from './cloudflare.js';
+import {
+  createCloudflareD1,
+  createCloudflareKv,
+  createUnconfiguredLinkStore,
+} from './cloudflare.js';
 import { loadConfig } from './config.js';
 import { openDb } from './db/client.js';
 
@@ -32,9 +36,18 @@ const linkStore = config.cloudflare
     })
   : createUnconfiguredLinkStore();
 
+const scanStore = config.cloudflare?.d1DatabaseId
+  ? createCloudflareD1({
+      accountId: config.cloudflare.accountId,
+      apiToken: config.cloudflare.apiToken,
+      databaseId: config.cloudflare.d1DatabaseId,
+    })
+  : null;
+
 const app = createApp({
   db,
   linkStore,
+  scanStore,
   publicBaseUrl: config.publicBaseUrl,
   auth: config.access ? cloudflareAccess(config.access) : null,
   log: true,

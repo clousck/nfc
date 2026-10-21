@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest';
-import { CloudflareApiError, createCloudflareKv } from '../server/cloudflare.js';
+import {
+  CloudflareApiError,
+  createCloudflareD1,
+  createCloudflareKv,
+} from '../server/cloudflare.js';
 
 interface Call {
   url: string;
@@ -87,5 +91,25 @@ describe('cliente KV de Cloudflare', () => {
     expect(err).toBeInstanceOf(CloudflareApiError);
     expect((err as CloudflareApiError).status).toBe(403);
     expect((err as Error).message).toContain('10000: Auth error');
+  });
+});
+
+describe('cliente D1 de Cloudflare', () => {
+  it('envía SQL con parámetros a /query y devuelve las filas', async () => {
+    const { fn, calls } = fakeFetch([
+      { body: { success: true, result: [{ success: true, results: [{ total: 3 }] }] } },
+    ]);
+    const d1 = createCloudflareD1({
+      accountId: 'acc',
+      apiToken: 'tok',
+      databaseId: 'db',
+      fetch: fn,
+    });
+    expect(await d1.query('SELECT 1 WHERE slug = ?', ['abc'])).toEqual([{ total: 3 }]);
+    expect(calls[0]).toMatchObject({
+      url: 'https://api.cloudflare.com/client/v4/accounts/acc/d1/database/db/query',
+      method: 'POST',
+      body: { sql: 'SELECT 1 WHERE slug = ?', params: ['abc'] },
+    });
   });
 });

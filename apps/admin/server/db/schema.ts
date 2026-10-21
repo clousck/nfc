@@ -25,6 +25,8 @@ export const tags = sqliteTable(
     // Número correlativo para identificar el chip a simple vista (#1, #2…). Nunca se reutiliza.
     number: integer('number').notNull(),
     businessId: text('business_id').references(() => businesses.id), // NULL = chip en inventario
+    // Cuándo se asignó al negocio actual: las estadísticas cuentan desde aquí. NULL = desde siempre.
+    assignedAt: integer('assigned_at'),
     label: text('label'),
     type: text('type', { enum: ['redirect', 'landing'] }).notNull(),
     targetUrl: text('target_url'),
