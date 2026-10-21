@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { api, type BusinessDetail, type Tag } from '../api';
+import { ReportLink } from '../components/ReportLink';
 import { useResource } from '../hooks';
 import { useNotices } from '../notices';
 import { emptyToNull, LoadError, Loading, TagBadges, BusinessStatusBadge, formatDate } from '../ui';
@@ -36,6 +37,8 @@ export function BusinessPage() {
         )}
         <AddTagForm businessId={data.id} onAdded={business.reload} />
       </section>
+
+      <ReportLink business={data} onChanged={business.reload} />
 
       <BusinessForm key={JSON.stringify(data)} business={data} onSaved={business.reload} />
       <DeleteBusiness business={data} />

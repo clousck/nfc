@@ -95,7 +95,7 @@ describe('negocios', () => {
   it('pausar un negocio publica sus chips como inactivos', async () => {
     const business = await createBusiness();
     const tag = await createTag({ businessId: business.id, targetUrl: 'https://g.page/r/X' });
-    expect(ctx.store.data.get(tag.slug)?.active).toBe(true);
+    expect(ctx.store.link(tag.slug)?.active).toBe(true);
 
     const res = await ctx.json<{ sync: { ok: boolean } }>(
       'PATCH',
@@ -103,7 +103,7 @@ describe('negocios', () => {
       { status: 'paused' },
     );
     expect(res.body.sync.ok).toBe(true);
-    expect(ctx.store.data.get(tag.slug)).toEqual({
+    expect(ctx.store.link(tag.slug)).toEqual({
       type: 'redirect',
       url: 'https://g.page/r/X',
       businessId: business.id,
@@ -122,7 +122,7 @@ describe('chips', () => {
       nfc: `https://go.penginexr.com/${tag.slug}`,
       qr: `https://go.penginexr.com/${tag.slug}?s=q`,
     });
-    expect(ctx.store.data.size).toBe(0);
+    expect(ctx.store.linkKeys()).toEqual([]);
   });
 
   it('asignar un chip con destino lo publica en KV y marca synced_at', async () => {
@@ -139,7 +139,7 @@ describe('chips', () => {
     expect(res.body.published).toBe(true);
     expect(res.body.sync.ok).toBe(true);
     expect(res.body.syncedAt).toEqual(expect.any(Number));
-    expect(ctx.store.data.get(tag.slug)).toEqual({
+    expect(ctx.store.link(tag.slug)).toEqual({
       type: 'redirect',
       url: 'https://wa.me/593999999999',
       businessId: business.id,
@@ -151,7 +151,7 @@ describe('chips', () => {
     const business = await createBusiness();
     const tag = await createTag({ businessId: business.id, targetUrl: 'https://a.example.com' });
     await ctx.json('PATCH', `/api/tags/${tag.slug}`, { targetUrl: 'https://b.example.com' });
-    expect(ctx.store.data.get(tag.slug)).toMatchObject({ url: 'https://b.example.com' });
+    expect(ctx.store.link(tag.slug)).toMatchObject({ url: 'https://b.example.com' });
   });
 
   it('liberar un chip lo elimina de KV', async () => {
@@ -378,8 +378,9 @@ describe('re-sincronizar todo', () => {
       '/api/sync',
     );
 
-    expect(res.body).toEqual({ ok: true, published: 1, deleted: 1 });
-    expect([...ctx.store.data.keys()]).toEqual([tag.slug]);
+    // 1 chip + 1 enlace de estadísticas publicados; la clave huérfana se borra.
+    expect(res.body).toEqual({ ok: true, published: 2, deleted: 1 });
+    expect(ctx.store.linkKeys()).toEqual([tag.slug]);
   });
 
   it('responde 502 si Cloudflare falla', async () => {

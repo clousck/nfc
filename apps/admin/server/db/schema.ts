@@ -15,6 +15,8 @@ export const businesses = sqliteTable('businesses', {
     .notNull()
     .default('active'),
   notes: text('notes'),
+  // Token del enlace privado de estadísticas (go.penginexr.com/r/<token>). NULL = sin enlace.
+  reportToken: text('report_token').unique(),
   createdAt: integer('created_at').notNull(),
 });
 

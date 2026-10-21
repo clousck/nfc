@@ -10,7 +10,9 @@ export interface TagView extends Tag {
   sync?: SyncResult;
 }
 
-export type BusinessDetail = Business & { tags: Tag[] };
+export type BusinessView = Business & { reportUrl: string | null };
+
+export type BusinessDetail = BusinessView & { tags: Tag[] };
 
 export interface TagScanStats {
   since: number | null;
@@ -109,6 +111,8 @@ export const api = {
   updateBusiness: (id: string, input: BusinessInput) =>
     request<Business & { sync: SyncResult }>('PATCH', `/api/businesses/${id}`, input),
   deleteBusiness: (id: string) => request<void>('DELETE', `/api/businesses/${id}`),
+  regenerateReport: (id: string) =>
+    request<BusinessView & { sync: SyncResult }>('POST', `/api/businesses/${id}/report-token`),
 
   listTags: (filter: { businessId?: string; unassigned?: boolean } = {}) => {
     const query = new URLSearchParams();

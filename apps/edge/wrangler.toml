@@ -5,6 +5,10 @@ compatibility_date = "2026-10-01"
 # Dominio público: Cloudflare crea el registro DNS de go.penginexr.com al desplegar.
 routes = [{ pattern = "go.penginexr.com", custom_domain = true }]
 
+[vars]
+# Ecuador no tiene horario de verano: UTC-5 fijo.
+REPORT_TZ_OFFSET_MINUTES = "-300"
+
 [observability]
 enabled = true
 

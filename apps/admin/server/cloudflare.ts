@@ -1,10 +1,18 @@
-import type { LinkRecord } from '@nfc/shared';
+import type { LinkRecord, ReportRecord } from '@nfc/shared';
 
-/** Copia publicada de los chips en KV `LINKS` (clave = slug). SQLite es la fuente de verdad. */
+/** Lo que se publica en KV `LINKS`: chips (clave = slug) y enlaces de estadísticas (`report:<token>`). */
+export type KvValue = LinkRecord | ReportRecord;
+
+export interface KvEntry {
+  key: string;
+  value: KvValue;
+}
+
+/** Copia publicada en KV `LINKS`. SQLite es la fuente de verdad. */
 export interface LinkStore {
-  putMany(entries: ReadonlyArray<{ slug: string; record: LinkRecord }>): Promise<void>;
-  deleteMany(slugs: readonly string[]): Promise<void>;
-  listSlugs(): Promise<string[]>;
+  putMany(entries: readonly KvEntry[]): Promise<void>;
+  deleteMany(keys: readonly string[]): Promise<void>;
+  listKeys(): Promise<string[]>;
 }
 
 export class CloudflareApiError extends Error {
@@ -89,28 +97,28 @@ export function createCloudflareKv(options: CloudflareKvOptions): LinkStore {
         await call(
           'PUT',
           '/bulk',
-          part.map(({ slug, record }) => ({ key: slug, value: JSON.stringify(record) })),
+          part.map(({ key, value }) => ({ key, value: JSON.stringify(value) })),
         );
       }
     },
 
-    async deleteMany(slugs) {
-      for (const part of chunk(slugs, BULK_LIMIT)) {
+    async deleteMany(keys) {
+      for (const part of chunk(keys, BULK_LIMIT)) {
         await call('POST', '/bulk/delete', part);
       }
     },
 
-    async listSlugs() {
-      const slugs: string[] = [];
+    async listKeys() {
+      const keys: string[] = [];
       let cursor: string | undefined;
       do {
         const query = new URLSearchParams({ limit: '1000' });
         if (cursor) query.set('cursor', cursor);
         const page = await call<Array<{ name: string }>>('GET', `/keys?${query.toString()}`);
-        slugs.push(...page.result.map((key) => key.name));
+        keys.push(...page.result.map((key) => key.name));
         cursor = page.result_info?.cursor || undefined;
       } while (cursor);
-      return slugs;
+      return keys;
     },
   };
 }
@@ -153,5 +161,5 @@ export function createUnconfiguredLinkStore(): LinkStore {
       0,
     );
   };
-  return { putMany: fail, deleteMany: fail, listSlugs: fail };
+  return { putMany: fail, deleteMany: fail, listKeys: fail };
 }

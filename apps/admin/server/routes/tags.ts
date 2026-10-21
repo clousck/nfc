@@ -5,7 +5,7 @@ import QRCode from 'qrcode';
 import { businesses, tagCounter, tags, type Tag } from '../db/schema.js';
 import type { AppDeps, AppEnv } from '../context.js';
 import { getTagScanStats } from '../scans.js';
-import { syncTags, toLinkRecord, unpublishTag } from '../sync.js';
+import { syncBusinesses, syncTags, toLinkRecord, unpublish } from '../sync.js';
 import { QrQuery, TagCreate, TagListQuery, TagUpdate, validate } from '../validation.js';
 
 const MAX_SLUG_ATTEMPTS = 5;
@@ -126,7 +126,8 @@ export function tagRoutes({ db, linkStore, scanStore, publicBaseUrl }: AppDeps) 
     if (Object.keys(changes).length > 0) {
       db.update(tags).set(changes).where(eq(tags.slug, slug)).run();
     }
-    const sync = await syncTags(db, linkStore, [slug]);
+    // También se actualiza el enlace de estadísticas del negocio anterior si cambió.
+    const sync = await syncTags(db, linkStore, [slug], [current.businessId]);
     const tag = findTag(slug);
     if (!tag) return c.json({ error: 'not_found' }, 404);
     return c.json({ ...present(tag), published: isPublished(tag), sync });
@@ -187,7 +188,12 @@ export function tagRoutes({ db, linkStore, scanStore, publicBaseUrl }: AppDeps) 
       );
     }
     db.delete(tags).where(eq(tags.slug, slug)).run();
-    const sync = await unpublishTag(linkStore, slug);
+    const removed = await unpublish(linkStore, [slug]);
+    const sync = tag.businessId
+      ? removed.ok
+        ? await syncBusinesses(db, linkStore, [tag.businessId])
+        : removed
+      : removed;
     return c.json({ deleted: slug, sync });
   });
 

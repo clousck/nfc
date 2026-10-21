@@ -2,6 +2,8 @@ import { Hono } from 'hono';
 import { isValidSlug, LinkRecord } from '@nfc/shared';
 import type { Env } from './env.js';
 import { FALLBACK_HTML } from './fallback.js';
+import { loadReport, queryReportStats } from './report.js';
+import { renderReportPage } from './report-page.js';
 import { buildScanEvent, recordScan } from './scan.js';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -28,6 +30,26 @@ async function readLink(kv: KVNamespace, slug: string): Promise<LinkRecord | nul
 }
 
 app.get('/health', (c) => c.text('ok', 200, { 'cache-control': NO_STORE }));
+
+/** Enlace privado de estadísticas de un negocio: go.penginexr.com/r/<token>. */
+app.get('/r/:token', async (c) => {
+  const report = await loadReport(c.env.LINKS, c.req.param('token'));
+  if (!report) return fallback();
+  const now = Date.now();
+  const offset = Number(c.env.REPORT_TZ_OFFSET_MINUTES ?? '-300');
+  const stats = await queryReportStats(c.env.DB, report, now, offset);
+  return new Response(renderReportPage(report, stats, now), {
+    headers: {
+      'content-type': 'text/html; charset=utf-8',
+      'cache-control': NO_STORE,
+      'x-robots-tag': 'noindex, nofollow',
+      // El token va en la URL: que no se filtre por Referer ni se pueda incrustar la página.
+      'referrer-policy': 'no-referrer',
+      'content-security-policy':
+        "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
+    },
+  });
+});
 
 app.get('/:slug', async (c) => {
   const slug = c.req.param('slug');

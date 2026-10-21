@@ -3,4 +3,6 @@ export interface Env {
   LINKS: KVNamespace;
   /** Tabla `scans`. */
   DB: D1Database;
+  /** Desplazamiento horario fijo para agrupar por día/hora en los reportes (Ecuador: -300). */
+  REPORT_TZ_OFFSET_MINUTES?: string;
 }

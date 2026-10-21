@@ -621,3 +621,7 @@ a.list-item:hover {
 .scan-list li > :last-child {
   text-align: right;
 }
+
+.report-hint {
+  margin-top: 0;
+}

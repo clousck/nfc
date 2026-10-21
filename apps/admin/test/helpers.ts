@@ -4,7 +4,7 @@ import Database from 'better-sqlite3';
 import type { LinkRecord } from '@nfc/shared';
 import type { MiddlewareHandler } from 'hono';
 import { createApp } from '../server/app.js';
-import type { LinkStore, ScanStore } from '../server/cloudflare.js';
+import type { KvEntry, KvValue, LinkStore, ScanStore } from '../server/cloudflare.js';
 import type { AppEnv } from '../server/context.js';
 import { openDb } from '../server/db/client.js';
 
@@ -54,24 +54,34 @@ export class FakeScanStore implements ScanStore {
 
 /** KV en memoria; `failing = true` simula una caída de la API de Cloudflare. */
 export class FakeLinkStore implements LinkStore {
-  readonly data = new Map<string, LinkRecord>();
+  readonly data = new Map<string, KvValue>();
   failing = false;
 
   private check() {
     if (this.failing) throw new Error('Cloudflare API caída');
   }
 
-  async putMany(entries: ReadonlyArray<{ slug: string; record: LinkRecord }>) {
+  async putMany(entries: readonly KvEntry[]) {
     this.check();
-    for (const { slug, record } of entries) this.data.set(slug, record);
+    for (const { key, value } of entries) this.data.set(key, value);
   }
 
-  async deleteMany(slugs: readonly string[]) {
-    this.check();
-    for (const slug of slugs) this.data.delete(slug);
+  /** Registro de chip publicado bajo `slug`. */
+  link(slug: string): LinkRecord | undefined {
+    return this.data.get(slug) as LinkRecord | undefined;
   }
 
-  async listSlugs() {
+  /** Claves de chips (sin enlaces de estadísticas). */
+  linkKeys(): string[] {
+    return [...this.data.keys()].filter((key) => !key.includes(':'));
+  }
+
+  async deleteMany(keys: readonly string[]) {
+    this.check();
+    for (const key of keys) this.data.delete(key);
+  }
+
+  async listKeys() {
     this.check();
     return [...this.data.keys()];
   }

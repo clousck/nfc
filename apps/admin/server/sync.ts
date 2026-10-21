@@ -1,6 +1,6 @@
-import { eq, inArray } from 'drizzle-orm';
-import type { LinkRecord } from '@nfc/shared';
-import type { LinkStore } from './cloudflare.js';
+import { asc, eq, inArray, isNotNull } from 'drizzle-orm';
+import { reportKey, type LinkRecord, type ReportRecord } from '@nfc/shared';
+import type { KvEntry, LinkStore } from './cloudflare.js';
 import type { Db } from './db/client.js';
 import { businesses, tags, type Business, type Tag } from './db/schema.js';
 
@@ -26,6 +26,21 @@ export function toLinkRecord(tag: Tag, business: Business | null): LinkRecord | 
   return { type: 'landing', businessId: business.id, active };
 }
 
+/** Datos del enlace de estadísticas, o `null` si no debe publicarse (sin token o cancelado). */
+export function toReportRecord(business: Business, businessTags: Tag[]): ReportRecord | null {
+  if (!business.reportToken || business.status === 'cancelled') return null;
+  return {
+    businessId: business.id,
+    name: business.name,
+    tags: businessTags.map((t) => ({
+      slug: t.slug,
+      number: t.number,
+      label: t.label,
+      since: t.assignedAt,
+    })),
+  };
+}
+
 function errorMessage(err: unknown): string {
   return err instanceof Error ? err.message : String(err);
 }
@@ -38,52 +53,108 @@ function loadTagsWithBusiness(db: Db, slugs?: readonly string[]) {
   return (slugs ? query.where(inArray(tags.slug, [...slugs])) : query).all();
 }
 
-/** Publica en KV el estado actual de los chips indicados. No lanza: devuelve el resultado. */
-export async function syncTags(
+function tagsOf(db: Db, businessId: string): Tag[] {
+  return db
+    .select()
+    .from(tags)
+    .where(eq(tags.businessId, businessId))
+    .orderBy(asc(tags.number))
+    .all();
+}
+
+/** Entradas de KV (chips y enlace) que dependen de los negocios indicados. */
+function businessEntries(db: Db, businessIds: readonly string[]) {
+  const toPut: KvEntry[] = [];
+  const toDelete: string[] = [];
+  const slugs: string[] = [];
+  const rows = db
+    .select()
+    .from(businesses)
+    .where(inArray(businesses.id, [...businessIds]))
+    .all();
+  for (const business of rows) {
+    const businessTags = tagsOf(db, business.id);
+    if (business.reportToken) {
+      const report = toReportRecord(business, businessTags);
+      if (report) toPut.push({ key: reportKey(business.reportToken), value: report });
+      else toDelete.push(reportKey(business.reportToken));
+    }
+    for (const tag of businessTags) {
+      slugs.push(tag.slug);
+      const record = toLinkRecord(tag, business);
+      if (record) toPut.push({ key: tag.slug, value: record });
+      else toDelete.push(tag.slug);
+    }
+  }
+  return { toPut, toDelete, slugs };
+}
+
+async function publish(
   db: Db,
   store: LinkStore,
-  slugs: readonly string[],
+  toPut: KvEntry[],
+  toDelete: string[],
+  syncedSlugs: string[],
 ): Promise<SyncResult> {
-  if (slugs.length === 0) return { ok: true };
-  const rows = loadTagsWithBusiness(db, slugs);
-  const toPut: Array<{ slug: string; record: LinkRecord }> = [];
-  const toDelete: string[] = [];
-  for (const { tag, business } of rows) {
-    const record = toLinkRecord(tag, business);
-    if (record) toPut.push({ slug: tag.slug, record });
-    else toDelete.push(tag.slug);
-  }
   try {
     if (toPut.length > 0) await store.putMany(toPut);
     if (toDelete.length > 0) await store.deleteMany(toDelete);
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
   }
-  db.update(tags)
-    .set({ syncedAt: Date.now() })
-    .where(inArray(tags.slug, [...slugs]))
-    .run();
+  if (syncedSlugs.length > 0) {
+    db.update(tags).set({ syncedAt: Date.now() }).where(inArray(tags.slug, syncedSlugs)).run();
+  }
   return { ok: true };
 }
 
-export async function syncBusinessTags(
+/**
+ * Publica en KV los chips indicados y el enlace de estadísticas de los negocios
+ * afectados (incluidos los que acaban de perder un chip). No lanza.
+ */
+export async function syncTags(
   db: Db,
   store: LinkStore,
-  businessId: string,
+  slugs: readonly string[],
+  alsoBusinessIds: readonly (string | null | undefined)[] = [],
 ): Promise<SyncResult> {
-  const slugs = db
-    .select({ slug: tags.slug })
-    .from(tags)
-    .where(eq(tags.businessId, businessId))
-    .all()
-    .map((row) => row.slug);
-  return syncTags(db, store, slugs);
+  const toPut: KvEntry[] = [];
+  const toDelete: string[] = [];
+  const synced = new Set<string>();
+  const affected = new Set(alsoBusinessIds.filter((id): id is string => !!id));
+
+  for (const { tag, business } of slugs.length > 0 ? loadTagsWithBusiness(db, slugs) : []) {
+    synced.add(tag.slug);
+    if (business) {
+      affected.add(business.id);
+      continue; // se publica junto con su negocio
+    }
+    toDelete.push(tag.slug); // chip libre: no debe estar en KV
+  }
+
+  if (affected.size > 0) {
+    const entries = businessEntries(db, [...affected]);
+    toPut.push(...entries.toPut);
+    toDelete.push(...entries.toDelete);
+    for (const slug of entries.slugs) synced.add(slug);
+  }
+
+  if (toPut.length === 0 && toDelete.length === 0) return { ok: true };
+  return publish(db, store, toPut, toDelete, [...synced]);
 }
 
-/** Elimina un chip de KV (el registro ya no existe en SQLite). */
-export async function unpublishTag(store: LinkStore, slug: string): Promise<SyncResult> {
+export async function syncBusinesses(
+  db: Db,
+  store: LinkStore,
+  businessIds: readonly string[],
+): Promise<SyncResult> {
+  return syncTags(db, store, [], businessIds);
+}
+
+/** Elimina claves de KV que ya no existen en SQLite (chip borrado, enlace regenerado…). */
+export async function unpublish(store: LinkStore, keys: readonly string[]): Promise<SyncResult> {
   try {
-    await store.deleteMany([slug]);
+    await store.deleteMany(keys);
     return { ok: true };
   } catch (err) {
     return { ok: false, error: errorMessage(err) };
@@ -92,19 +163,25 @@ export async function unpublishTag(store: LinkStore, slug: string): Promise<Sync
 
 /**
  * "Re-sincronizar todo": reescribe KV completo desde SQLite y borra las claves
- * que ya no corresponden a ningún chip publicable. Lanza si la API falla.
+ * que ya no corresponden a ningún chip ni enlace publicable. Lanza si la API falla.
  */
 export async function resyncAll(db: Db, store: LinkStore): Promise<ResyncResult> {
-  const rows = loadTagsWithBusiness(db);
-  const toPut: Array<{ slug: string; record: LinkRecord }> = [];
-  for (const { tag, business } of rows) {
+  const toPut: KvEntry[] = [];
+  for (const { tag, business } of loadTagsWithBusiness(db)) {
     const record = toLinkRecord(tag, business);
-    if (record) toPut.push({ slug: tag.slug, record });
+    if (record) toPut.push({ key: tag.slug, value: record });
+  }
+  const withReports = db.select().from(businesses).where(isNotNull(businesses.reportToken)).all();
+  for (const business of withReports) {
+    const report = toReportRecord(business, tagsOf(db, business.id));
+    if (report && business.reportToken) {
+      toPut.push({ key: reportKey(business.reportToken), value: report });
+    }
   }
   await store.putMany(toPut);
 
-  const published = new Set(toPut.map((entry) => entry.slug));
-  const orphans = (await store.listSlugs()).filter((slug) => !published.has(slug));
+  const published = new Set(toPut.map((entry) => entry.key));
+  const orphans = (await store.listKeys()).filter((key) => !published.has(key));
   if (orphans.length > 0) await store.deleteMany(orphans);
 
   db.update(tags).set({ syncedAt: Date.now() }).run();

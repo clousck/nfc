@@ -38,8 +38,8 @@ describe('cliente KV de Cloudflare', () => {
     const { fn, calls } = fakeFetch([]);
     await client(fn).putMany([
       {
-        slug: 'aB3dE5f',
-        record: {
+        key: 'aB3dE5f',
+        value: {
           type: 'redirect',
           url: 'https://x.com',
           businessId: 'b_0123456789ab',
@@ -72,12 +72,12 @@ describe('cliente KV de Cloudflare', () => {
     });
   });
 
-  it('listSlugs pagina con cursor', async () => {
+  it('listKeys pagina con cursor', async () => {
     const { fn, calls } = fakeFetch([
       { body: { success: true, result: [{ name: 'a' }], result_info: { cursor: 'c1' } } },
       { body: { success: true, result: [{ name: 'b' }], result_info: { cursor: '' } } },
     ]);
-    expect(await client(fn).listSlugs()).toEqual(['a', 'b']);
+    expect(await client(fn).listKeys()).toEqual(['a', 'b']);
     expect(calls[1]?.url).toBe(`${BASE}/keys?limit=1000&cursor=c1`);
   });
 
