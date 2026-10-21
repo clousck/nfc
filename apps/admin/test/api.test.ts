@@ -20,6 +20,7 @@ interface BusinessBody {
 
 interface TagBody {
   slug: string;
+  number: number;
   businessId: string | null;
   targetUrl: string | null;
   syncedAt: number | null;
@@ -212,13 +213,48 @@ describe('chips', () => {
   });
 });
 
+describe('número de chip', () => {
+  it('asigna números correlativos desde 1', async () => {
+    const a = await createTag();
+    const b = await createTag();
+    const c = await createTag();
+    expect([a.number, b.number, c.number]).toEqual([1, 2, 3]);
+  });
+
+  it('no reutiliza el número de un chip borrado', async () => {
+    await createTag();
+    const second = await createTag();
+    await ctx.request('DELETE', `/api/tags/${second.slug}`);
+    const third = await createTag();
+    expect(third.number).toBe(3);
+  });
+
+  it('lista los chips del más nuevo al más antiguo', async () => {
+    await createTag();
+    await createTag();
+    const list = await ctx.json<TagBody[]>('GET', '/api/tags');
+    expect(list.body.map((t) => t.number)).toEqual([2, 1]);
+  });
+
+  it('busca un chip por número', async () => {
+    await createTag();
+    const second = await createTag({ label: 'Mesa 2' });
+    const found = await ctx.json<TagBody>('GET', '/api/tags/number/2');
+    expect(found.status).toBe(200);
+    expect(found.body.slug).toBe(second.slug);
+    expect((await ctx.request('GET', '/api/tags/number/99')).status).toBe(404);
+  });
+});
+
 describe('QR', () => {
   it('genera SVG con la URL de QR', async () => {
     const tag = await createTag();
     const res = await ctx.request('GET', `/api/tags/${tag.slug}/qr`);
     expect(res.status).toBe(200);
     expect(res.headers.get('content-type')).toContain('image/svg+xml');
-    expect(res.headers.get('content-disposition')).toBe(`inline; filename="${tag.slug}-qr.svg"`);
+    expect(res.headers.get('content-disposition')).toBe(
+      `inline; filename="chip-${tag.number}-${tag.slug}-qr.svg"`,
+    );
     expect(await res.text()).toMatch(/^<svg/);
   });
 

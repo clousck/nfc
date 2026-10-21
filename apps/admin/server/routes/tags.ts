@@ -1,8 +1,8 @@
 import { buildTagUrls, generateSlug } from '@nfc/shared';
-import { and, desc, eq, isNull, type SQL } from 'drizzle-orm';
+import { and, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import { Hono } from 'hono';
 import QRCode from 'qrcode';
-import { businesses, tags, type Tag } from '../db/schema.js';
+import { businesses, tagCounter, tags, type Tag } from '../db/schema.js';
 import type { AppDeps, AppEnv } from '../context.js';
 import { syncTags, toLinkRecord, unpublishTag } from '../sync.js';
 import { QrQuery, TagCreate, TagListQuery, TagUpdate, validate } from '../validation.js';
@@ -45,7 +45,7 @@ export function tagRoutes({ db, linkStore, publicBaseUrl }: AppDeps) {
       .select()
       .from(tags)
       .where(and(...filters))
-      .orderBy(desc(tags.createdAt))
+      .orderBy(desc(tags.number))
       .all();
     return c.json(rows.map(present));
   });
@@ -59,11 +59,23 @@ export function tagRoutes({ db, linkStore, publicBaseUrl }: AppDeps) {
     let created: Tag | undefined;
     for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS && !created; attempt++) {
       try {
-        created = db
-          .insert(tags)
-          .values({ ...body, slug: generateSlug(), createdAt: Date.now() })
-          .returning()
-          .get();
+        // Número y chip en la misma transacción: si el slug choca, el contador no avanza.
+        created = db.transaction((tx) => {
+          const counter = tx
+            .insert(tagCounter)
+            .values({ id: 1, last: 1 })
+            .onConflictDoUpdate({
+              target: tagCounter.id,
+              set: { last: sql`${tagCounter.last} + 1` },
+            })
+            .returning()
+            .get();
+          return tx
+            .insert(tags)
+            .values({ ...body, slug: generateSlug(), number: counter.last, createdAt: Date.now() })
+            .returning()
+            .get();
+        });
       } catch (err) {
         if (!isUniqueViolation(err)) throw err;
       }
@@ -73,6 +85,16 @@ export function tagRoutes({ db, linkStore, publicBaseUrl }: AppDeps) {
     const sync = await syncTags(db, linkStore, [created.slug]);
     const tag = findTag(created.slug) ?? created;
     return c.json({ ...present(tag), published: isPublished(tag), sync }, 201);
+  });
+
+  app.get('/number/:number{[0-9]+}', (c) => {
+    const tag = db
+      .select()
+      .from(tags)
+      .where(eq(tags.number, Number(c.req.param('number'))))
+      .get();
+    if (!tag) return c.json({ error: 'not_found' }, 404);
+    return c.json({ ...present(tag), published: isPublished(tag) });
   });
 
   app.get('/:slug', (c) => {
@@ -133,11 +155,12 @@ export function tagRoutes({ db, linkStore, publicBaseUrl }: AppDeps) {
 
   app.get('/:slug/qr', validate('query', QrQuery), async (c) => {
     const slug = c.req.param('slug');
-    if (!findTag(slug)) return c.json({ error: 'not_found' }, 404);
+    const tag = findTag(slug);
+    if (!tag) return c.json({ error: 'not_found' }, 404);
     const { format, size, margin, download } = c.req.valid('query');
     const { qr } = buildTagUrls(publicBaseUrl, slug);
     const options = { errorCorrectionLevel: 'M' as const, margin, width: size };
-    const disposition = `${download === '1' ? 'attachment' : 'inline'}; filename="${slug}-qr.${format}"`;
+    const disposition = `${download === '1' ? 'attachment' : 'inline'}; filename="chip-${tag.number}-${slug}-qr.${format}"`;
 
     if (format === 'png') {
       const png = await QRCode.toBuffer(qr, { ...options, type: 'png' });

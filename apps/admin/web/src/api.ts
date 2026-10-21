@@ -99,6 +99,7 @@ export const api = {
     return request<TagView[]>('GET', `/api/tags${qs ? `?${qs}` : ''}`);
   },
   getTag: (slug: string) => request<TagView>('GET', `/api/tags/${slug}`),
+  getTagByNumber: (number: number) => request<TagView>('GET', `/api/tags/number/${number}`),
   createTag: (input: TagInput) => request<TagView>('POST', '/api/tags', input),
   updateTag: (slug: string, input: TagInput) =>
     request<TagView>('PATCH', `/api/tags/${slug}`, input),

@@ -1,5 +1,5 @@
 import { sql } from 'drizzle-orm';
-import { index, integer, sqliteTable, text } from 'drizzle-orm/sqlite-core';
+import { check, index, integer, sqliteTable, text, uniqueIndex } from 'drizzle-orm/sqlite-core';
 
 // Timestamps en epoch ms (igual que `scans.ts` en D1).
 
@@ -22,6 +22,8 @@ export const tags = sqliteTable(
   'tags',
   {
     slug: text('slug').primaryKey(), // 6–7 chars base62, aleatorio
+    // Número correlativo para identificar el chip a simple vista (#1, #2…). Nunca se reutiliza.
+    number: integer('number').notNull(),
     businessId: text('business_id').references(() => businesses.id), // NULL = chip en inventario
     label: text('label'),
     type: text('type', { enum: ['redirect', 'landing'] }).notNull(),
@@ -33,7 +35,20 @@ export const tags = sqliteTable(
     syncedAt: integer('synced_at'),
     createdAt: integer('created_at').notNull(),
   },
-  (table) => [index('idx_tags_business_id').on(table.businessId)],
+  (table) => [
+    index('idx_tags_business_id').on(table.businessId),
+    uniqueIndex('idx_tags_number').on(table.number),
+  ],
+);
+
+/** Contador de una sola fila con el último número de chip asignado. */
+export const tagCounter = sqliteTable(
+  'tag_counter',
+  {
+    id: integer('id').primaryKey(),
+    last: integer('last').notNull(),
+  },
+  (table) => [check('tag_counter_single_row', sql`${table.id} = 1`)],
 );
 
 export const landings = sqliteTable('landings', {

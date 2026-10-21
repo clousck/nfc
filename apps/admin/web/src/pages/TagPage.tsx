@@ -26,7 +26,8 @@ export function TagPage() {
       </p>
       <div className="page-title">
         <h1>
-          {data.label ?? 'Chip'} <code>{data.slug}</code>
+          Chip #{data.number}
+          {data.label && <span className="muted"> · {data.label}</span>}
         </h1>
         <div className="badges">
           <TagBadges tag={data} />
@@ -169,7 +170,8 @@ function TagForm({
           Activo (si lo desactivas, muestra la página genérica)
         </label>
         <p className="muted small">
-          Creado: {formatDate(tag.createdAt)} · Publicado en Cloudflare: {formatDate(tag.syncedAt)}
+          Código interno: <code>{tag.slug}</code> · Creado: {formatDate(tag.createdAt)} · Publicado
+          en Cloudflare: {formatDate(tag.syncedAt)}
           {tag.lockedAt ? ` · Bloqueado: ${formatDate(tag.lockedAt)}` : ''}
         </p>
         <div className="actions">
@@ -204,7 +206,7 @@ function TagDangerZone({ tag, onChanged }: { tag: TagView; onChanged: () => void
   }
 
   async function remove() {
-    if (!confirm(`¿Borrar el chip ${tag.slug}? No se puede deshacer.`)) return;
+    if (!confirm(`¿Borrar el chip #${tag.number}? No se puede deshacer.`)) return;
     try {
       const result = await api.deleteTag(tag.slug);
       reportSync(result.sync, 'Chip borrado.');

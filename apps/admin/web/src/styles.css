@@ -492,3 +492,9 @@ a.list-item:hover {
   line-height: 1;
   cursor: pointer;
 }
+
+.goto .input {
+  width: 6.5rem;
+  padding: 0.3rem 0.6rem;
+  font-size: 0.9rem;
+}

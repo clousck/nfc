@@ -34,7 +34,8 @@ export function InventoryPage() {
         {(tags.data ?? []).map((tag) => (
           <li key={tag.slug} className="list-item">
             <Link to={`/chips/${tag.slug}`} className="truncate">
-              <code>{tag.slug}</code> {tag.label && <span className="muted">{tag.label}</span>}
+              <strong>#{tag.number}</strong>{' '}
+              {tag.label && <span className="muted">{tag.label}</span>}
             </Link>
             <div className="badges">
               <TagBadges tag={tag} />

@@ -1,6 +1,6 @@
-import { useState } from 'react';
-import { BrowserRouter, Link, NavLink, Route, Routes } from 'react-router';
-import { api } from './api';
+import { useState, type FormEvent } from 'react';
+import { BrowserRouter, Link, NavLink, Route, Routes, useNavigate } from 'react-router';
+import { api, ApiError } from './api';
 import { NoticeProvider, useNotices } from './notices';
 import { BusinessesPage } from './pages/BusinessesPage';
 import { BusinessPage } from './pages/BusinessPage';
@@ -58,11 +58,47 @@ function Header() {
           </NavLink>
           <NavLink to="/inventario">Chips libres</NavLink>
         </nav>
+        <GoToChip />
         <button type="button" className="button button-small" onClick={resync} disabled={syncing}>
           {syncing ? 'Sincronizando…' : 'Re-sincronizar todo'}
         </button>
       </div>
     </header>
+  );
+}
+
+/** Salto rápido a un chip por su número (el que se ve escrito en el stand). */
+function GoToChip() {
+  const navigate = useNavigate();
+  const { notify, reportError } = useNotices();
+  const [value, setValue] = useState('');
+
+  async function submit(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const number = Number(value.replace(/^#/, '').trim());
+    if (!Number.isInteger(number) || number <= 0) return;
+    try {
+      const tag = await api.getTagByNumber(number);
+      setValue('');
+      navigate(`/chips/${tag.slug}`);
+    } catch (err) {
+      if (err instanceof ApiError && err.status === 404)
+        notify('warning', `No existe el chip #${number}.`);
+      else reportError(err);
+    }
+  }
+
+  return (
+    <form className="goto" onSubmit={submit} role="search">
+      <input
+        className="input"
+        inputMode="numeric"
+        placeholder="Chip #"
+        aria-label="Ir al chip número"
+        value={value}
+        onChange={(e) => setValue(e.target.value)}
+      />
+    </form>
   );
 }
 
