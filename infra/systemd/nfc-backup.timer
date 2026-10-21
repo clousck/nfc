@@ -1,0 +1,14 @@
+# Instalación:
+#   sudo cp infra/systemd/nfc-backup.{service,timer} /etc/systemd/system/
+#   sudo systemctl daemon-reload && sudo systemctl enable --now nfc-backup.timer
+#   systemctl list-timers nfc-backup.timer
+[Unit]
+Description=Backup diario del admin NFC (03:00)
+
+[Timer]
+OnCalendar=*-*-* 03:00:00
+Persistent=true
+RandomizedDelaySec=5min
+
+[Install]
+WantedBy=timers.target

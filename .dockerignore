@@ -1,0 +1,12 @@
+**/node_modules
+**/dist
+**/coverage
+**/.wrangler
+**/data
+**/*.db
+**/*.db-shm
+**/*.db-wal
+**/.env
+**/.dev.vars
+.git
+.deploy-test

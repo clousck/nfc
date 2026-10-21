@@ -1,0 +1,11 @@
+[Unit]
+Description=Backup de la base SQLite del admin NFC a /mnt/usb
+RequiresMountsFor=/mnt/usb
+
+[Service]
+Type=oneshot
+# Opcional: DB_PATH, RETENTION_DAYS, D1_EXPORT, CLOUDFLARE_API_TOKEN, etc.
+EnvironmentFile=-/etc/nfc-backup.env
+ExecStart=/opt/nfc-platform/infra/backup.sh
+Nice=10
+IOSchedulingClass=idle
