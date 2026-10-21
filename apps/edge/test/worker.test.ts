@@ -108,13 +108,20 @@ describe('GET /:slug', () => {
     expect(row?.is_bot).toBe(1);
   });
 
-  it('muestra la página de fallback si el slug no existe', async () => {
+  it('muestra la página de fallback si el slug no existe, sin registrarlo', async () => {
     const res = await call('/noExist', { userAgent: IPHONE });
 
     expect(res.status).toBe(404);
     expect(res.headers.get('content-type')).toContain('text/html');
     expect(await res.text()).toContain('Este enlace no está disponible');
-    expect(await scans()).toHaveLength(1);
+    expect(await scans()).toHaveLength(0);
+  });
+
+  it('no registra rutas que prueban los escáneres de internet', async () => {
+    for (const path of ['/server', '/version', '/wp-admin']) {
+      expect((await call(path, { userAgent: 'Mozilla/5.0' })).status).toBe(404);
+    }
+    expect(await scans()).toHaveLength(0);
   });
 
   it('muestra la página de fallback si el chip está inactivo', async () => {
@@ -129,6 +136,8 @@ describe('GET /:slug', () => {
 
     expect(res.status).toBe(404);
     expect(await res.text()).toContain('Este enlace no está disponible');
+    // Un chip existente pero inactivo sí se registra (sirve para saber que lo siguen usando).
+    expect(await scans()).toHaveLength(1);
   });
 
   it('no redirige si el registro de KV es inválido (p. ej. http://)', async () => {

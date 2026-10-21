@@ -33,21 +33,23 @@ app.get('/:slug', async (c) => {
   const slug = c.req.param('slug');
   if (!isValidSlug(slug)) return fallback();
 
-  // Se registra todo escaneo de un slug con formato válido (también inexistentes o
-  // inactivos) para poder diagnosticar chips mal configurados. No bloquea la respuesta.
-  const event = buildScanEvent(c.req.raw, slug);
-  c.executionCtx.waitUntil(
-    recordScan(c.env.DB, event).catch((err: unknown) => {
-      console.error('No se pudo registrar el escaneo', { slug, err: String(err) });
-    }),
-  );
-
   let link: LinkRecord | null;
   try {
     link = await readLink(c.env.LINKS, slug);
   } catch (err) {
     console.error('Error leyendo KV', { slug, err: String(err) });
     return fallback(503);
+  }
+
+  // Solo se registran chips publicados (también inactivos): las rutas que prueban los
+  // escáneres de internet (/server, /version…) no deben llenar D1. No bloquea la respuesta.
+  if (link) {
+    const event = buildScanEvent(c.req.raw, slug);
+    c.executionCtx.waitUntil(
+      recordScan(c.env.DB, event).catch((err: unknown) => {
+        console.error('No se pudo registrar el escaneo', { slug, err: String(err) });
+      }),
+    );
   }
 
   if (!link || !link.active) return fallback();
