@@ -41,19 +41,23 @@ export async function hashToken(token: string): Promise<string> {
 }
 
 /**
- * Los formularios solo se aceptan desde nuestras propias páginas (protección CSRF):
- * el navegador indica el origen en `Origin` y/o `Sec-Fetch-Site`.
+ * Los formularios solo se aceptan desde nuestras propias páginas (protección CSRF).
+ *
+ * Se usa primero `Sec-Fetch-Site`, que los navegadores modernos envían siempre y una web
+ * ajena no puede falsificar. `Origin` no sirve sola: con `Referrer-Policy: no-referrer`
+ * (la de nuestras páginas) Chrome envía `Origin: null` incluso desde nuestro propio sitio.
  */
 export function isSameOrigin(request: Request): boolean {
-  const url = new URL(request.url);
+  const site = request.headers.get('sec-fetch-site');
+  if (site !== null) return site === 'same-origin' || site === 'none';
   const origin = request.headers.get('origin');
-  if (origin) {
+  if (origin && origin !== 'null') {
     try {
-      return new URL(origin).host === url.host;
+      return new URL(origin).host === new URL(request.url).host;
     } catch {
       return false;
     }
   }
-  const site = request.headers.get('sec-fetch-site');
-  return site === null || site === 'same-origin' || site === 'none';
+  // Navegadores antiguos sin ninguna de las dos cabeceras: se permite.
+  return true;
 }

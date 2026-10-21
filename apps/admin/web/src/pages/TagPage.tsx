@@ -100,12 +100,20 @@ export function TagPage() {
 
       <ScanStats tag={data} businessName={owner?.name} />
 
-      <TagForm
-        key={JSON.stringify(data)}
-        tag={data}
-        businesses={businesses.data ?? []}
-        onSaved={tag.reload}
-      />
+      {/* El selector de negocio necesita la lista cargada: si se dibujara vacío quedaría en
+          "Sin asignar" y al guardar desasignaría el chip. */}
+      {businesses.data ? (
+        <TagForm
+          key={JSON.stringify(data)}
+          tag={data}
+          businesses={businesses.data}
+          onSaved={tag.reload}
+        />
+      ) : businesses.error ? (
+        <LoadError error={businesses.error} retry={businesses.reload} />
+      ) : (
+        <Loading />
+      )}
       <TagDangerZone tag={data} onChanged={tag.reload} />
     </>
   );
@@ -143,13 +151,31 @@ function TagForm({
     const form = new FormData(event.currentTarget);
     setSaving(true);
     try {
-      const result = await api.updateTag(tag.slug, {
+      const next = {
         type: mode,
         businessId: emptyToNull(String(form.get('businessId') ?? '')),
         label: emptyToNull(String(form.get('label') ?? '')),
         targetUrl: emptyToNull(String(form.get('targetUrl') ?? '')),
         active: form.get('active') === 'on',
-      });
+      };
+      // Solo se envía lo que cambió: un campo que no tocaste nunca se modifica sin querer.
+      const changes = Object.fromEntries(
+        Object.entries(next).filter(([key, value]) => tag[key as keyof typeof next] !== value),
+      ) as Partial<typeof next>;
+      if (Object.keys(changes).length === 0) {
+        reportSync(undefined, 'No había cambios que guardar.');
+        return;
+      }
+      if (
+        'businessId' in changes &&
+        changes.businessId === null &&
+        !confirm(
+          '¿Quitar este chip de su negocio? Dejará de redirigir hasta que lo vuelvas a asignar.',
+        )
+      ) {
+        return;
+      }
+      const result = await api.updateTag(tag.slug, changes);
       reportSync(result.sync, 'Chip guardado. El cambio tarda hasta un minuto en verse.');
       onSaved();
     } catch (err) {

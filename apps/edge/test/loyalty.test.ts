@@ -19,13 +19,18 @@ interface Call {
   method?: string;
   form?: Record<string, string>;
   cookies?: string[];
-  origin?: string | null;
+  /** Por defecto, lo que envía Chrome desde nuestras páginas (no-referrer → Origin: null). */
+  site?: 'same-origin' | 'cross-site';
+  origin?: string;
 }
 
 async function call(path: string, init: Call = {}): Promise<Response> {
   const headers: Record<string, string> = { 'user-agent': IPHONE };
   if (init.cookies?.length) headers['cookie'] = init.cookies.join('; ');
-  if (init.method === 'POST' && init.origin !== null) headers['origin'] = init.origin ?? ORIGIN;
+  if (init.method === 'POST') {
+    headers['origin'] = init.origin ?? 'null';
+    headers['sec-fetch-site'] = init.site ?? 'same-origin';
+  }
   const body = init.form ? new URLSearchParams(init.form) : undefined;
   if (body) headers['content-type'] = 'application/x-www-form-urlencoded';
   const ctx = createExecutionContext();
@@ -167,6 +172,7 @@ describe('alta', () => {
   it('rechaza formularios enviados desde otro sitio', async () => {
     const res = await call(`/l/${SLUG}/registro`, {
       method: 'POST',
+      site: 'cross-site',
       origin: 'https://malicioso.example',
       form: { nombre: 'Ana', telefono: '0991234567', acepto: 'on', fuente: 'nfc' },
     });
@@ -352,5 +358,48 @@ describe('baja y privacidad', () => {
     const html = await (await call(`/l/privacidad/${BIZ}`)).text();
     expect(html).toContain('Qué guardamos');
     expect(html).toContain('Café Los Andes');
+  });
+});
+
+describe('protección de formularios', () => {
+  it('acepta el Origin: null que Chrome envía desde nuestras páginas sin referrer', async () => {
+    const res = await register();
+    expect(res.status).toBe(303);
+  });
+
+  it('acepta navegadores sin Sec-Fetch-Site si el Origin es el nuestro', async () => {
+    const ctx = createExecutionContext();
+    const res = await worker.fetch(
+      new Request(`${ORIGIN}/l/${SLUG}/registro`, {
+        method: 'POST',
+        headers: { origin: ORIGIN, 'content-type': 'application/x-www-form-urlencoded' },
+        body: new URLSearchParams({
+          nombre: 'Ana',
+          telefono: '0997777777',
+          acepto: 'on',
+          fuente: 'nfc',
+        }),
+        redirect: 'manual',
+      }),
+      env,
+      ctx,
+    );
+    await waitOnExecutionContext(ctx);
+    expect(res.status).toBe(303);
+  });
+
+  it('rechaza Sec-Fetch-Site: cross-site aunque el Origin parezca el nuestro', async () => {
+    const res = await call(`/l/${SLUG}/registro`, {
+      method: 'POST',
+      site: 'cross-site',
+      origin: ORIGIN,
+      form: { nombre: 'Ana', telefono: '0991234567', acepto: 'on', fuente: 'nfc' },
+    });
+    expect(res.status).toBe(403);
+  });
+
+  it('activar el validador también funciona con Origin: null', async () => {
+    const res = await call(`/r/${TOKEN}/validador`, { method: 'POST' });
+    expect(res.status).toBe(303);
   });
 });
