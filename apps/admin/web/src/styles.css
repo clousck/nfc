@@ -649,18 +649,6 @@ a.list-item:hover {
   margin-top: 0.5rem;
 }
 
-.nfc-confirm {
-  display: flex;
-  flex-direction: column;
-  gap: 0.3rem;
-  margin-top: 0.5rem;
-  font-size: 0.85rem;
-}
-
-.nfc-confirm .input {
-  max-width: 8rem;
-}
-
 .nfc-error {
   margin: 1rem 0 0;
 }

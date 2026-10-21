@@ -20,7 +20,6 @@ export function NfcWriter({ tag, onLocked }: { tag: TagView; onLocked: () => voi
   const { notify } = useNotices();
   const [step, setStep] = useState<Step>(tag.lockedAt ? 'locked' : 'idle');
   const [error, setError] = useState<string | null>(null);
-  const [confirmText, setConfirmText] = useState('');
   const controller = useRef<AbortController | null>(null);
   const url = tag.urls.nfc;
 
@@ -86,6 +85,9 @@ export function NfcWriter({ tag, onLocked }: { tag: TagView; onLocked: () => voi
   const verify = () => run('verifying', (signal) => verifyTagUrl(factory, url, signal), 'verified');
 
   async function lock() {
+    if (!confirm(`¿Bloquear el chip #${tag.number} para siempre? No se podrá volver a grabar.`)) {
+      return;
+    }
     const ok = await run('locking', (signal) => verifyAndLockTag(factory!, url, signal), 'locked');
     if (!ok) return;
     try {
@@ -98,7 +100,6 @@ export function NfcWriter({ tag, onLocked }: { tag: TagView; onLocked: () => voi
   }
 
   const waiting = step === 'writing' || step === 'verifying' || step === 'locking';
-  const lockReady = confirmText.trim().replace(/^#/, '') === String(tag.number);
 
   return (
     <section>
@@ -142,22 +143,12 @@ export function NfcWriter({ tag, onLocked }: { tag: TagView; onLocked: () => voi
             <li>
               <strong>Bloquear (opcional y permanente).</strong> El chip no se podrá volver a grabar
               nunca. Primero prueba que funciona escaneándolo con otro móvil.
-              <label className="nfc-confirm">
-                Para confirmar, escribe el número del chip ({tag.number}):
-                <input
-                  className="input"
-                  inputMode="numeric"
-                  value={confirmText}
-                  onChange={(e) => setConfirmText(e.target.value)}
-                  disabled={step !== 'verified'}
-                />
-              </label>
               <div className="actions actions-start">
                 <button
                   type="button"
                   className="button button-danger"
                   onClick={lock}
-                  disabled={step !== 'verified' || !lockReady}
+                  disabled={step !== 'verified'}
                 >
                   {step === 'locking' ? 'Acerca el chip y no lo muevas…' : 'Bloquear para siempre'}
                 </button>
