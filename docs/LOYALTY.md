@@ -1,6 +1,7 @@
 # Programa de fidelidad — diseño
 
-> Estado: **diseño acordado, pendiente de construir** (F1).
+> Estado: **primera etapa construida y probada en local; pendiente de publicar** (requiere
+> aplicar la migración `infra/d1/migrations/0002_loyalty.sql` en la D1 de producción).
 
 ## 1. Objetivo y decisiones
 
@@ -79,16 +80,36 @@ podría sumar 1 sello al día sin ir al local. Para un café no compensa el esfu
 de valor alto existen los chips **NTAG 424 DNA**, que generan una URL **distinta y firmada** en
 cada acercamiento.
 
-## 5. Canje del premio (sin pasos extra)
+## 5. Canje del premio
 
-1. El cliente, **frente al cajero**, pulsa **Canjear ahora**.
-2. En ese momento el premio se marca como usado en el servidor y la tarjeta vuelve a 0.
-3. La pantalla muestra una confirmación **"viva"**, imposible de falsificar con una captura:
-   - un sello animado,
-   - la **hora actual con segundos** avanzando,
-   - el **color del día** (cambia cada día),
-   - un código corto de canje (p. ej. `K7-42`).
-4. El cajero solo mira la pantalla y entrega el premio que el local tiene anunciado.
+1. El cliente, **frente al cajero**, pulsa **Canjear mi premio** y confirma.
+2. En ese momento la tarjeta vuelve a 0 y se crea un **código de canje único** (8 caracteres,
+   p. ej. `K7PQ-42XZ`).
+3. La pantalla del cliente muestra:
+   - un **QR único** del canje,
+   - la **hora actual con segundos** avanzando y un pulso animado,
+   - el **color del día** (cambia cada día; el personal lo ve en su enlace de estadísticas),
+   - el código escrito.
+4. **Sin validar** (lo mínimo): el cajero mira la pantalla y entrega el premio.
+5. **Validación opcional** (para estar seguros):
+   - Una vez, el personal abre el **enlace de estadísticas** del negocio en el móvil del local y
+     pulsa **«Usar este móvil para validar canjes»**.
+   - En cada canje, escanea el QR del cliente con la **cámara normal** del móvil: se abre
+     _"✓ Canje válido · María · 6 visitas"_ o _"Este canje ya se usó"_ en rojo.
+   - Si el QR no se puede escanear, el código se teclea en el mismo enlace.
+   - La pantalla del cliente cambia sola a **"✓ Premio entregado"** cuando el local valida.
+
+Una captura de pantalla no sirve: el reloj no avanza y, si el local valida, un código ya usado
+sale en rojo. Solo el móvil activado del negocio puede validar sus canjes; el cliente que
+escanea su propio QR solo ve un aviso.
+
+## 5b. La tarjeta de sellos (marketing)
+
+- Aspecto de **tarjeta física**: nombre e iniciales del negocio, cuadrícula de N espacios.
+- Cada visita es un **sello de tinta** con las iniciales del negocio, girado como un sello real.
+- El último espacio es el **regalo 🎁**; el sello nuevo aparece con animación de **estampado**.
+- Barra de progreso y mensaje: _"¡+1 sello! Llevas 3 de 6. Te faltan 3 visitas"_.
+- Al completar: _"¡María, tu premio está listo!"_ en naranja con **confeti**.
 
 ## 6. Datos personales y privacidad
 

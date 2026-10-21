@@ -17,6 +17,8 @@ export const businesses = sqliteTable('businesses', {
   notes: text('notes'),
   // Token del enlace privado de estadísticas (go.penginexr.com/r/<token>). NULL = sin enlace.
   reportToken: text('report_token').unique(),
+  // Programa de fidelidad: visitas necesarias para el premio. NULL = programa desactivado.
+  loyaltyVisits: integer('loyalty_visits'),
   createdAt: integer('created_at').notNull(),
 });
 
@@ -30,7 +32,7 @@ export const tags = sqliteTable(
     // Cuándo se asignó al negocio actual: las estadísticas cuentan desde aquí. NULL = desde siempre.
     assignedAt: integer('assigned_at'),
     label: text('label'),
-    type: text('type', { enum: ['redirect', 'landing'] }).notNull(),
+    type: text('type', { enum: ['redirect', 'landing', 'loyalty'] }).notNull(),
     targetUrl: text('target_url'),
     active: integer('active', { mode: 'boolean' })
       .notNull()

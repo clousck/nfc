@@ -378,8 +378,8 @@ describe('re-sincronizar todo', () => {
       '/api/sync',
     );
 
-    // 1 chip + 1 enlace de estadísticas publicados; la clave huérfana se borra.
-    expect(res.body).toEqual({ ok: true, published: 2, deleted: 1 });
+    // 1 chip + 1 enlace de estadísticas + 1 registro del negocio; la clave huérfana se borra.
+    expect(res.body).toEqual({ ok: true, published: 3, deleted: 1 });
     expect(ctx.store.linkKeys()).toEqual([tag.slug]);
   });
 

@@ -3,3 +3,4 @@ export * from './slug.js';
 export * from './user-agent.js';
 export * from './urls.js';
 export * from './report.js';
+export * from './loyalty.js';

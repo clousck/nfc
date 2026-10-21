@@ -5,6 +5,7 @@ import { Hono, type MiddlewareHandler } from 'hono';
 import { logger } from 'hono/logger';
 import type { AppDeps, AppEnv } from './context.js';
 import { businessRoutes } from './routes/businesses.js';
+import { loyaltyRoutes } from './routes/loyalty.js';
 import { tagRoutes } from './routes/tags.js';
 import { resyncAll } from './sync.js';
 
@@ -27,6 +28,7 @@ export function createApp(options: CreateAppOptions) {
   if (auth) app.use('/api/*', auth);
 
   app.route('/api/businesses', businessRoutes(deps));
+  app.route('/api/businesses', loyaltyRoutes(deps));
   app.route('/api/tags', tagRoutes(deps));
 
   app.post('/api/sync', async (c) => {

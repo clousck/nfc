@@ -201,6 +201,16 @@ export function tagRoutes({ db, linkStore, scanStore, publicBaseUrl }: AppDeps) 
     const slug = c.req.param('slug');
     const tag = findTag(slug);
     if (!tag) return c.json({ error: 'not_found' }, 404);
+    if (tag.type === 'loyalty') {
+      return c.json(
+        {
+          error: 'loyalty_no_qr',
+          message:
+            'Los chips de fidelidad no tienen QR: con la URL del QR se podrían sumar sellos sin ir al local.',
+        },
+        409,
+      );
+    }
     const { format, size, margin, download } = c.req.valid('query');
     const { qr } = buildTagUrls(publicBaseUrl, slug);
     const options = { errorCorrectionLevel: 'M' as const, margin, width: size };

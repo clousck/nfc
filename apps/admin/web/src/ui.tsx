@@ -36,6 +36,7 @@ export function BusinessStatusBadge({ status }: { status: Business['status'] }) 
 export function TagBadges({ tag }: { tag: Tag }) {
   return (
     <>
+      {tag.type === 'loyalty' ? <Badge tone="info">Fidelidad</Badge> : null}
       {tag.active ? <Badge tone="ok">Activo</Badge> : <Badge tone="muted">Inactivo</Badge>}
       {tag.lockedAt ? <Badge tone="info">Bloqueado</Badge> : null}
       {tag.businessId && !tag.syncedAt ? <Badge tone="warn">Sin publicar</Badge> : null}
@@ -80,4 +81,35 @@ export function LoadError({ error, retry }: { error: Error; retry: () => void })
 export function emptyToNull(value: string): string | null {
   const trimmed = value.trim();
   return trimmed === '' ? null : trimmed;
+}
+
+export type ChipMode = 'redirect' | 'loyalty';
+
+/** Selector del modo del chip, con explicación de cada opción. */
+export function ChipModeField({
+  value,
+  onChange,
+}: {
+  value: ChipMode;
+  onChange: (mode: ChipMode) => void;
+}) {
+  return (
+    <label>
+      Modo
+      <select
+        className="input"
+        name="type"
+        value={value}
+        onChange={(e) => onChange(e.target.value === 'loyalty' ? 'loyalty' : 'redirect')}
+      >
+        <option value="redirect">Directo: lleva al destino</option>
+        <option value="loyalty">Fidelidad: tarjeta de sellos y luego el destino</option>
+      </select>
+      <span className="hint">
+        {value === 'loyalty'
+          ? 'Cada acercamiento suma 1 sello al día. Los chips de fidelidad no tienen QR.'
+          : 'Va directo a reseñas, WhatsApp, menú… Puede tener QR.'}
+      </span>
+    </label>
+  );
 }

@@ -5,7 +5,16 @@ import { NfcWriter } from '../components/NfcWriter';
 import { ScanStats } from '../components/ScanStats';
 import { useResource } from '../hooks';
 import { useNotices } from '../notices';
-import { CopyButton, emptyToNull, formatDate, LoadError, Loading, TagBadges } from '../ui';
+import {
+  ChipModeField,
+  CopyButton,
+  emptyToNull,
+  formatDate,
+  LoadError,
+  Loading,
+  TagBadges,
+  type ChipMode,
+} from '../ui';
 
 export function TagPage() {
   const { slug = '' } = useParams();
@@ -42,35 +51,50 @@ export function TagPage() {
         </div>
       )}
 
-      <div className="grid-2">
+      {data.type === 'loyalty' ? (
         <section className="card">
-          <h2>Para grabar e imprimir</h2>
+          <h2>Para grabar</h2>
           <UrlLine
             title="URL del chip NFC"
             hint="Esta es la que se graba en el chip."
             url={data.urls.nfc}
           />
-          <UrlLine
-            title="URL del código QR"
-            hint="Lleva ?s=q para contar los escaneos por QR aparte."
-            url={data.urls.qr}
-          />
+          <p className="hint">
+            Los chips de fidelidad no tienen QR: con la URL del QR cualquiera podría sumar sellos
+            sin ir al local.
+          </p>
         </section>
+      ) : (
+        <div className="grid-2">
+          <section className="card">
+            <h2>Para grabar e imprimir</h2>
+            <UrlLine
+              title="URL del chip NFC"
+              hint="Esta es la que se graba en el chip."
+              url={data.urls.nfc}
+            />
+            <UrlLine
+              title="URL del código QR"
+              hint="Lleva ?s=q para contar los escaneos por QR aparte."
+              url={data.urls.qr}
+            />
+          </section>
 
-        <section className="card qr-card">
-          <h2>Código QR</h2>
-          <img src={qrUrl(data.slug, 'svg')} alt={`Código QR de ${data.slug}`} className="qr" />
-          <div className="actions">
-            <a className="button button-small" href={qrUrl(data.slug, 'svg', true)}>
-              Descargar SVG
-            </a>
-            <a className="button button-small" href={qrUrl(data.slug, 'png', true)}>
-              Descargar PNG
-            </a>
-          </div>
-          <p className="hint">SVG para imprenta (no pierde calidad), PNG para todo lo demás.</p>
-        </section>
-      </div>
+          <section className="card qr-card">
+            <h2>Código QR</h2>
+            <img src={qrUrl(data.slug, 'svg')} alt={`Código QR de ${data.slug}`} className="qr" />
+            <div className="actions">
+              <a className="button button-small" href={qrUrl(data.slug, 'svg', true)}>
+                Descargar SVG
+              </a>
+              <a className="button button-small" href={qrUrl(data.slug, 'png', true)}>
+                Descargar PNG
+              </a>
+            </div>
+            <p className="hint">SVG para imprenta (no pierde calidad), PNG para todo lo demás.</p>
+          </section>
+        </div>
+      )}
 
       <NfcWriter tag={data} onLocked={tag.reload} />
 
@@ -112,6 +136,7 @@ function TagForm({
 }) {
   const { reportSync, reportError } = useNotices();
   const [saving, setSaving] = useState(false);
+  const [mode, setMode] = useState<ChipMode>(tag.type === 'loyalty' ? 'loyalty' : 'redirect');
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -119,6 +144,7 @@ function TagForm({
     setSaving(true);
     try {
       const result = await api.updateTag(tag.slug, {
+        type: mode,
         businessId: emptyToNull(String(form.get('businessId') ?? '')),
         label: emptyToNull(String(form.get('label') ?? '')),
         targetUrl: emptyToNull(String(form.get('targetUrl') ?? '')),
@@ -158,8 +184,9 @@ function TagForm({
             maxLength={80}
           />
         </label>
+        <ChipModeField value={mode} onChange={setMode} />
         <label>
-          Destino
+          {mode === 'loyalty' ? 'Destino después de la tarjeta (opcional)' : 'Destino'}
           <input
             className="input"
             name="targetUrl"
@@ -234,7 +261,7 @@ function TagDangerZone({ tag, onChanged }: { tag: TagView; onChanged: () => void
   return (
     <div className="actions actions-start">
       <button type="button" className="button" onClick={lock}>
-        Anotar como bloqueado (si lo bloqueaste con otra app)
+        Ya lo bloqueé con otra app
       </button>
       <button type="button" className="button button-danger" onClick={remove}>
         Borrar chip

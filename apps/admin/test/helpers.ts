@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import Database from 'better-sqlite3';
 import type { LinkRecord } from '@nfc/shared';
@@ -9,12 +9,14 @@ import type { AppEnv } from '../server/context.js';
 import { openDb } from '../server/db/client.js';
 
 const migrationsFolder = fileURLToPath(new URL('../drizzle', import.meta.url));
-const d1Migration = readFileSync(
-  new URL('../../../infra/d1/migrations/0001_create_scans.sql', import.meta.url),
-  'utf8',
-);
+const d1MigrationsDir = new URL('../../../infra/d1/migrations/', import.meta.url);
+const d1Migration = readdirSync(d1MigrationsDir)
+  .filter((f) => f.endsWith('.sql'))
+  .sort()
+  .map((f) => readFileSync(new URL(f, d1MigrationsDir), 'utf8'))
+  .join('\n');
 
-/** D1 simulada: ejecuta el mismo SQL sobre SQLite en memoria con la migración real. */
+/** D1 simulada: ejecuta el mismo SQL sobre SQLite en memoria con las migraciones reales. */
 export class FakeScanStore implements ScanStore {
   readonly sqlite = new Database(':memory:');
   failing = false;
@@ -25,7 +27,13 @@ export class FakeScanStore implements ScanStore {
 
   async query<T>(sql: string, params: ReadonlyArray<string | number> = []): Promise<T[]> {
     if (this.failing) throw new Error('D1 caída');
-    return this.sqlite.prepare(sql).all(...params) as T[];
+    const stmt = this.sqlite.prepare(sql);
+    // Como la API de D1: las sentencias sin resultados (DELETE/UPDATE) devuelven [].
+    if (!stmt.reader) {
+      stmt.run(...params);
+      return [];
+    }
+    return stmt.all(...params) as T[];
   }
 
   add(scan: {

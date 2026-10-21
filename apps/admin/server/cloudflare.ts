@@ -1,7 +1,10 @@
-import type { LinkRecord, ReportRecord } from '@nfc/shared';
+import type { BusinessRecord, LinkRecord, ReportRecord } from '@nfc/shared';
 
-/** Lo que se publica en KV `LINKS`: chips (clave = slug) y enlaces de estadísticas (`report:<token>`). */
-export type KvValue = LinkRecord | ReportRecord;
+/**
+ * Lo que se publica en KV `LINKS`: chips (clave = slug), enlaces de estadísticas
+ * (`report:<token>`) y datos de cada negocio (`business:<id>`).
+ */
+export type KvValue = LinkRecord | ReportRecord | BusinessRecord;
 
 export interface KvEntry {
   key: string;

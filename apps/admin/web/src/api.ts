@@ -34,10 +34,22 @@ export interface TagScanStats {
 }
 
 export type BusinessInput = Partial<
-  Pick<Business, 'name' | 'contactName' | 'phone' | 'plan' | 'status' | 'notes'>
+  Pick<Business, 'name' | 'contactName' | 'phone' | 'plan' | 'status' | 'notes' | 'loyaltyVisits'>
 >;
 
-export type TagInput = Partial<Pick<Tag, 'businessId' | 'label' | 'targetUrl' | 'active'>>;
+export type TagInput = Partial<Pick<Tag, 'businessId' | 'label' | 'targetUrl' | 'active' | 'type'>>;
+
+export interface LoyaltyCard {
+  id: number;
+  name: string;
+  phone: string;
+  stamps: number;
+  expired: boolean;
+  lastVisitAt: number | null;
+  marketing: boolean;
+  createdAt: number;
+  redemptions: number;
+}
 
 export class ApiError extends Error {
   constructor(
@@ -111,6 +123,13 @@ export const api = {
   updateBusiness: (id: string, input: BusinessInput) =>
     request<Business & { sync: SyncResult }>('PATCH', `/api/businesses/${id}`, input),
   deleteBusiness: (id: string) => request<void>('DELETE', `/api/businesses/${id}`),
+  getLoyalty: (id: string) =>
+    request<{ visits: number | null; cards: LoyaltyCard[] }>(
+      'GET',
+      `/api/businesses/${id}/loyalty`,
+    ),
+  deleteLoyaltyCard: (id: string, cardId: number) =>
+    request<{ deleted: number }>('DELETE', `/api/businesses/${id}/loyalty/cards/${cardId}`),
   regenerateReport: (id: string) =>
     request<BusinessView & { sync: SyncResult }>('POST', `/api/businesses/${id}/report-token`),
 

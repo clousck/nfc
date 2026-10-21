@@ -1,9 +1,20 @@
 import { Hono } from 'hono';
-import { isValidSlug, LinkRecord } from '@nfc/shared';
+import {
+  businessKey,
+  BusinessRecord,
+  isValidSlug,
+  LinkRecord,
+  sourceFromParam,
+  SOURCE_PARAM,
+} from '@nfc/shared';
 import type { Env } from './env.js';
 import { FALLBACK_HTML } from './fallback.js';
+import { handleLoyaltyTap, loyaltyRoutes } from './loyalty/routes.js';
+import { colorOfDay } from './loyalty/pages.js';
+import { readCookie, STAFF_COOKIE } from './loyalty/security.js';
+import { localDay, loyaltySummary } from './loyalty/store.js';
 import { loadReport, queryReportStats } from './report.js';
-import { renderReportPage } from './report-page.js';
+import { renderReportPage, type ReportLoyalty } from './report-page.js';
 import { buildScanEvent, recordScan } from './scan.js';
 
 const app = new Hono<{ Bindings: Env }>();
@@ -37,8 +48,23 @@ app.get('/r/:token', async (c) => {
   if (!report) return fallback();
   const now = Date.now();
   const offset = Number(c.env.REPORT_TZ_OFFSET_MINUTES ?? '-300');
-  const stats = await queryReportStats(c.env.DB, report, now, offset);
-  return new Response(renderReportPage(report, stats, now), {
+  const token = c.req.param('token');
+  const [stats, businessRaw] = await Promise.all([
+    queryReportStats(c.env.DB, report, now, offset),
+    c.env.LINKS.get(businessKey(report.businessId), 'json'),
+  ]);
+  const business = BusinessRecord.safeParse(businessRaw);
+  let loyalty: ReportLoyalty | null = null;
+  if (business.success && business.data.loyaltyVisits !== null) {
+    loyalty = {
+      visits: business.data.loyaltyVisits,
+      summary: await loyaltySummary(c.env.DB, report.businessId, now),
+      isValidator: readCookie(c.req.raw, STAFF_COOKIE) === token,
+      color: colorOfDay(localDay(now, offset)),
+      token,
+    };
+  }
+  return new Response(renderReportPage(report, stats, now, loyalty), {
     headers: {
       'content-type': 'text/html; charset=utf-8',
       'cache-control': NO_STORE,
@@ -46,10 +72,13 @@ app.get('/r/:token', async (c) => {
       // El token va en la URL: que no se filtre por Referer ni se pueda incrustar la página.
       'referrer-policy': 'no-referrer',
       'content-security-policy':
-        "default-src 'none'; style-src 'unsafe-inline'; frame-ancestors 'none'; base-uri 'none'",
+        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
     },
   });
 });
+
+// Fidelidad: alta, tarjeta, canje, validación y baja (rutas de varios segmentos).
+app.route('/', loyaltyRoutes);
 
 app.get('/:slug', async (c) => {
   const slug = c.req.param('slug');
@@ -81,6 +110,11 @@ app.get('/:slug', async (c) => {
       status: 302,
       headers: { location: link.url, 'cache-control': NO_STORE },
     });
+  }
+
+  if (link.type === 'loyalty') {
+    const source = sourceFromParam(new URL(c.req.url).searchParams.get(SOURCE_PARAM));
+    return handleLoyaltyTap(c, link, slug, source);
   }
 
   // Las landings se renderizan en la Fase 3; mientras tanto, página genérica.

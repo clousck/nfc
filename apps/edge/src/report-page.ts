@@ -1,7 +1,42 @@
 import type { ReportRecord } from '@nfc/shared';
+import { esc, TIME_ZONE } from './html.js';
+import type { LoyaltySummary } from './loyalty/store.js';
 import { REPORT_DAYS, type ReportStats } from './report.js';
 
-const TIME_ZONE = 'America/Guayaquil';
+export interface ReportLoyalty {
+  visits: number;
+  summary: LoyaltySummary;
+  /** ¿Este móvil ya está activado para validar canjes de este negocio? */
+  isValidator: boolean;
+  color: { name: string; hex: string };
+  token: string;
+}
+
+function loyaltySection(l: ReportLoyalty): string {
+  const s = l.summary;
+  const validator = l.isValidator
+    ? `<p class="ok-line">✓ Este móvil valida canjes. Pídele al cliente su QR y escanéalo con la cámara.</p>
+      <form method="get" action="/v" class="code-form">
+        <label for="codigo">¿No se puede escanear? Escribe el código:</label>
+        <div class="code-row"><input id="codigo" name="codigo" required placeholder="K7PQ-42XZ" autocomplete="off" autocapitalize="characters"><button type="submit">Validar</button></div>
+      </form>`
+    : `<p class="sub">Opcional: si quieres confirmar cada premio, activa el móvil del local y escanea el QR que muestra el cliente al canjear.</p>
+      <form method="post" action="/r/${esc(l.token)}/validador"><button type="submit">Usar este móvil para validar canjes</button></form>`;
+  return `<section class="card" id="validar">
+    <h2>Programa de fidelidad</h2>
+    <p class="sub">${l.visits} visitas = 1 premio · últimos 30 días</p>
+    <div class="kpis">
+      ${tile('Tarjetas activas', s.activeCards, `${n(s.cards)} en total`)}
+      ${tile('Sellos', s.stamps30)}
+      ${tile('Premios canjeados', s.redemptions30, s.validated30 > 0 ? `${n(s.validated30)} validados` : '')}
+    </div>
+    <div class="validator">
+      <h3>Validar canjes</h3>
+      <p class="day-color"><span class="swatch" style="background:${l.color.hex}"></span>Color de hoy: <strong>${esc(l.color.name)}</strong> · la pantalla de canje del cliente tiene este color y un reloj con segundos.</p>
+      ${validator}
+    </div>
+  </section>`;
+}
 
 const dayLabel = new Intl.DateTimeFormat('es-EC', {
   timeZone: 'UTC',
@@ -23,15 +58,6 @@ const dateTime = new Intl.DateTimeFormat('es-EC', {
 });
 const timeOnly = new Intl.DateTimeFormat('es-EC', { timeZone: TIME_ZONE, timeStyle: 'short' });
 const integer = new Intl.NumberFormat('es-EC');
-
-function esc(value: string): string {
-  return value
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&#39;');
-}
 
 const n = (value: number) => integer.format(value);
 const scans = (value: number) => `${n(value)} ${value === 1 ? 'escaneo' : 'escaneos'}`;
@@ -117,7 +143,12 @@ function osSplit(stats: ReportStats, total: number): string {
   return `<div class="stack" role="img" aria-label="Teléfonos: ${parts.map(([l, v]) => `${l} ${pct(v, total)}%`).join(', ')}">${segments}</div><ul class="legend">${legend}</ul>`;
 }
 
-export function renderReportPage(report: ReportRecord, stats: ReportStats, now: number): string {
+export function renderReportPage(
+  report: ReportRecord,
+  stats: ReportStats,
+  now: number,
+  loyalty: ReportLoyalty | null = null,
+): string {
   const today = stats.days[stats.days.length - 1]?.count ?? 0;
   const last7 = stats.days.slice(-7).reduce((sum, d) => sum + d.count, 0);
   const last30 = stats.days.reduce((sum, d) => sum + d.count, 0);
@@ -217,6 +248,7 @@ export function renderReportPage(report: ReportRecord, stats: ReportStats, now: 
     <h1>${esc(report.name)}</h1>
     <p class="sub">Estadísticas de tus chips y códigos QR · actualizado a las ${esc(timeOnly.format(new Date(now)))}</p>
   </header>
+  ${loyalty ? loyaltySection(loyalty) : ''}
   ${body}
   <footer class="foot">Las visitas automáticas (vistas previas de WhatsApp, buscadores…) no se cuentan. Este enlace es privado: compártelo solo con quien quieras.</footer>
 </main>
@@ -288,6 +320,15 @@ td:last-child,th:last-child{text-align:right}
 .legend li{display:grid;grid-template-columns:12px 1fr auto 3.5rem;align-items:center;gap:8px}
 .legend .muted{text-align:right;font-variant-numeric:tabular-nums}
 .key{width:12px;height:12px;border-radius:3px}
+.validator{margin-top:8px;padding-top:12px;border-top:1px solid var(--grid)}
+h3{font-size:.95rem;margin:0 0 6px}
+.day-color{display:flex;align-items:center;gap:8px;font-size:.875rem;color:var(--text-secondary);margin:0 0 10px}
+.swatch{flex:none;width:18px;height:18px;border-radius:50%}
+.ok-line{font-weight:600;margin:0 0 10px}
+form button{font:inherit;font-weight:600;padding:10px 14px;border-radius:10px;border:1px solid var(--series-1);background:var(--series-1);color:#fff;cursor:pointer}
+.code-form label{display:block;font-size:.8rem;color:var(--text-secondary);margin-bottom:4px}
+.code-row{display:flex;gap:8px}
+.code-row input{flex:1;min-width:0;font:inherit;padding:10px;border-radius:10px;border:1px solid var(--axis);background:var(--surface-1);color:var(--text-primary);text-transform:uppercase;letter-spacing:.06em}
 .foot{margin-top:24px;font-size:.8rem;color:var(--muted);text-align:center}
 @media (forced-colors:active){.bar,.seg,.key{background:CanvasText}}
 `;

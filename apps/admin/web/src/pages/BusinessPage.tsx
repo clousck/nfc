@@ -1,10 +1,20 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { api, type BusinessDetail, type Tag } from '../api';
+import { LoyaltyProgram } from '../components/LoyaltyProgram';
 import { ReportLink } from '../components/ReportLink';
 import { useResource } from '../hooks';
 import { useNotices } from '../notices';
-import { emptyToNull, LoadError, Loading, TagBadges, BusinessStatusBadge, formatDate } from '../ui';
+import {
+  emptyToNull,
+  LoadError,
+  Loading,
+  TagBadges,
+  BusinessStatusBadge,
+  formatDate,
+  ChipModeField,
+  type ChipMode,
+} from '../ui';
 
 export function BusinessPage() {
   const { id = '' } = useParams();
@@ -38,6 +48,8 @@ export function BusinessPage() {
         <AddTagForm businessId={data.id} onAdded={business.reload} />
       </section>
 
+      <LoyaltyProgram business={data} onChanged={business.reload} />
+
       <ReportLink business={data} onChanged={business.reload} />
 
       <BusinessForm key={JSON.stringify(data)} business={data} onSaved={business.reload} />
@@ -53,7 +65,11 @@ function TagRow({ tag }: { tag: Tag }) {
         <div className="truncate">
           <strong>#{tag.number}</strong> <code className="chip-code">{tag.slug}</code>
           {tag.label && <span className="muted"> · {tag.label}</span>}
-          <div className="muted small truncate">{tag.targetUrl ?? 'Sin destino'}</div>
+          <div className="muted small truncate">
+            {tag.type === 'loyalty'
+              ? `Tarjeta de sellos${tag.targetUrl ? ` → ${tag.targetUrl}` : ''}`
+              : (tag.targetUrl ?? 'Sin destino')}
+          </div>
         </div>
         <div className="badges">
           <TagBadges tag={tag} />
@@ -69,6 +85,7 @@ function AddTagForm({ businessId, onAdded }: { businessId: string; onAdded: () =
   const free = useResource(() => api.listTags({ unassigned: true }), 'free-tags');
   const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [mode, setMode] = useState<ChipMode>('redirect');
 
   async function submit(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -76,6 +93,7 @@ function AddTagForm({ businessId, onAdded }: { businessId: string; onAdded: () =
     const source = String(form.get('source') ?? 'new');
     const input = {
       businessId,
+      type: mode,
       label: emptyToNull(String(form.get('label') ?? '')),
       targetUrl: emptyToNull(String(form.get('targetUrl') ?? '')),
     };
@@ -126,14 +144,15 @@ function AddTagForm({ businessId, onAdded }: { businessId: string; onAdded: () =
           maxLength={80}
         />
       </label>
+      <ChipModeField value={mode} onChange={setMode} />
       <label>
-        Destino
+        {mode === 'loyalty' ? 'Destino después de la tarjeta (opcional)' : 'Destino'}
         <input
           className="input"
           name="targetUrl"
           type="url"
           placeholder="https://g.page/r/…/review"
-          required
+          required={mode === 'redirect'}
         />
         <span className="hint">
           Adonde lleva el chip: reseñas de Google, WhatsApp (https://wa.me/593…), Instagram, menú…

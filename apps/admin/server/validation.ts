@@ -1,5 +1,5 @@
 import { zValidator } from '@hono/zod-validator';
-import { BusinessId, TargetUrl } from '@nfc/shared';
+import { BusinessId, LoyaltyVisits, TargetUrl } from '@nfc/shared';
 import type { ValidationTargets } from 'hono';
 import { z } from 'zod';
 
@@ -24,6 +24,8 @@ export const BusinessCreate = z.object({
   plan: z.enum(['basic', 'premium']).optional(),
   status: z.enum(['active', 'paused', 'cancelled']).optional(),
   notes: optionalText(2000),
+  /** Visitas para el premio; null desactiva el programa de fidelidad. */
+  loyaltyVisits: LoyaltyVisits.nullable().optional(),
 });
 
 export const BusinessUpdate = BusinessCreate.partial();
@@ -31,13 +33,13 @@ export const BusinessUpdate = BusinessCreate.partial();
 export const TagCreate = z.object({
   businessId: BusinessId.nullable().optional(),
   label: optionalText(80),
-  type: z.enum(['redirect', 'landing']).default('redirect'),
+  type: z.enum(['redirect', 'landing', 'loyalty']).default('redirect'),
   targetUrl: TargetUrl.nullable().optional(),
   active: z.boolean().optional(),
 });
 
 export const TagUpdate = TagCreate.omit({ type: true })
-  .extend({ type: z.enum(['redirect', 'landing']).optional() })
+  .extend({ type: z.enum(['redirect', 'landing', 'loyalty']).optional() })
   .partial();
 
 export const TagListQuery = z.object({

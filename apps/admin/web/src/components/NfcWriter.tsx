@@ -50,7 +50,7 @@ export function NfcWriter({ tag, onLocked }: { tag: TagView; onLocked: () => voi
           <p className="muted small">
             Alternativa: copia la URL del chip y grábala con la app <strong>NFC Tools</strong>{' '}
             (Escribir → Añadir un registro → URL). Luego bloquéalo con «Otros → Bloquear la
-            etiqueta» y anótalo aquí con «Anotar como bloqueado».
+            etiqueta» y anótalo aquí con «Ya lo bloqueé con otra app».
           </p>
           <div className="url-box">
             <code className="truncate">{url}</code>

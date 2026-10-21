@@ -1,5 +1,11 @@
-import { asc, eq, inArray, isNotNull } from 'drizzle-orm';
-import { reportKey, type LinkRecord, type ReportRecord } from '@nfc/shared';
+import { asc, eq, inArray } from 'drizzle-orm';
+import {
+  businessKey,
+  reportKey,
+  type BusinessRecord,
+  type LinkRecord,
+  type ReportRecord,
+} from '@nfc/shared';
 import type { KvEntry, LinkStore } from './cloudflare.js';
 import type { Db } from './db/client.js';
 import { businesses, tags, type Business, type Tag } from './db/schema.js';
@@ -23,7 +29,15 @@ export function toLinkRecord(tag: Tag, business: Business | null): LinkRecord | 
     if (!tag.targetUrl) return null;
     return { type: 'redirect', url: tag.targetUrl, businessId: business.id, active };
   }
+  if (tag.type === 'loyalty') {
+    return { type: 'loyalty', url: tag.targetUrl, businessId: business.id, active };
+  }
   return { type: 'landing', businessId: business.id, active };
+}
+
+/** Datos del negocio que el Worker necesita para las páginas de fidelidad. */
+export function toBusinessRecord(business: Business): BusinessRecord {
+  return { name: business.name, loyaltyVisits: business.loyaltyVisits };
 }
 
 /** Datos del enlace de estadísticas, o `null` si no debe publicarse (sin token o cancelado). */
@@ -74,6 +88,7 @@ function businessEntries(db: Db, businessIds: readonly string[]) {
     .all();
   for (const business of rows) {
     const businessTags = tagsOf(db, business.id);
+    toPut.push({ key: businessKey(business.id), value: toBusinessRecord(business) });
     if (business.reportToken) {
       const report = toReportRecord(business, businessTags);
       if (report) toPut.push({ key: reportKey(business.reportToken), value: report });
@@ -171,7 +186,11 @@ export async function resyncAll(db: Db, store: LinkStore): Promise<ResyncResult>
     const record = toLinkRecord(tag, business);
     if (record) toPut.push({ key: tag.slug, value: record });
   }
-  const withReports = db.select().from(businesses).where(isNotNull(businesses.reportToken)).all();
+  const allBusinesses = db.select().from(businesses).all();
+  for (const business of allBusinesses) {
+    toPut.push({ key: businessKey(business.id), value: toBusinessRecord(business) });
+  }
+  const withReports = allBusinesses.filter((b) => b.reportToken !== null);
   for (const business of withReports) {
     const report = toReportRecord(business, tagsOf(db, business.id));
     if (report && business.reportToken) {

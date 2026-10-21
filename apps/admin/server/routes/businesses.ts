@@ -1,4 +1,10 @@
-import { buildReportUrl, generateId, generateReportToken, reportKey } from '@nfc/shared';
+import {
+  buildReportUrl,
+  businessKey,
+  generateId,
+  generateReportToken,
+  reportKey,
+} from '@nfc/shared';
 import { asc, count, desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
 import { businesses, tags, type Business } from '../db/schema.js';
@@ -98,10 +104,10 @@ export function businessRoutes({ db, linkStore, publicBaseUrl }: AppDeps) {
     }
     const deleted = db.delete(businesses).where(eq(businesses.id, id)).returning().get();
     if (!deleted) return c.json({ error: 'not_found' }, 404);
-    if (deleted.reportToken) {
-      const sync = await unpublish(linkStore, [reportKey(deleted.reportToken)]);
-      if (!sync.ok) console.error('No se pudo retirar el enlace de estadísticas', sync.error);
-    }
+    const keys = [businessKey(deleted.id)];
+    if (deleted.reportToken) keys.push(reportKey(deleted.reportToken));
+    const sync = await unpublish(linkStore, keys);
+    if (!sync.ok) console.error('No se pudo retirar el negocio de Cloudflare', sync.error);
     return c.body(null, 204);
   });
 

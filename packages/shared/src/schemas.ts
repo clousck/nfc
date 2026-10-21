@@ -32,6 +32,13 @@ export const LinkRecord = z.discriminatedUnion('type', [
     businessId: BusinessId,
     active: z.boolean(),
   }),
+  /** Tarjeta de sellos del negocio; `url` es el destino opcional tras ver la tarjeta. */
+  z.object({
+    type: z.literal('loyalty'),
+    url: TargetUrl.nullable(),
+    businessId: BusinessId,
+    active: z.boolean(),
+  }),
 ]);
 export type LinkRecord = z.infer<typeof LinkRecord>;
 
