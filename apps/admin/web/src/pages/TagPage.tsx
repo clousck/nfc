@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { api, qrUrl, type Business, type TagView } from '../api';
+import { NfcWriter } from '../components/NfcWriter';
 import { ScanStats } from '../components/ScanStats';
 import { useResource } from '../hooks';
 import { useNotices } from '../notices';
@@ -70,6 +71,8 @@ export function TagPage() {
           <p className="hint">SVG para imprenta (no pierde calidad), PNG para todo lo demás.</p>
         </section>
       </div>
+
+      <NfcWriter tag={data} onLocked={tag.reload} />
 
       <ScanStats tag={data} businessName={owner?.name} />
 
@@ -231,7 +234,7 @@ function TagDangerZone({ tag, onChanged }: { tag: TagView; onChanged: () => void
   return (
     <div className="actions actions-start">
       <button type="button" className="button" onClick={lock}>
-        Marcar como grabado y bloqueado
+        Anotar como bloqueado (si lo bloqueaste con otra app)
       </button>
       <button type="button" className="button button-danger" onClick={remove}>
         Borrar chip

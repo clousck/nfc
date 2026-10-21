@@ -157,6 +157,11 @@ main.container {
   grid-template-columns: 1fr;
 }
 
+/* Sin esto, una URL larga ensancha la columna y la tarjeta se sale de la pantalla. */
+.grid-2 > * {
+  min-width: 0;
+}
+
 @media (min-width: 760px) {
   .grid-2 {
     grid-template-columns: 3fr 2fr;
@@ -624,4 +629,44 @@ a.list-item:hover {
 
 .report-hint {
   margin-top: 0;
+}
+
+/* Grabado NFC */
+.nfc-steps {
+  margin: 0;
+  padding-left: 1.2rem;
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.nfc-steps li.done > strong::after {
+  content: ' ✓';
+  color: var(--ok-text);
+}
+
+.nfc-steps .actions {
+  margin-top: 0.5rem;
+}
+
+.nfc-confirm {
+  display: flex;
+  flex-direction: column;
+  gap: 0.3rem;
+  margin-top: 0.5rem;
+  font-size: 0.85rem;
+}
+
+.nfc-confirm .input {
+  max-width: 8rem;
+}
+
+.nfc-error {
+  margin: 1rem 0 0;
+}
+
+.nfc-ok {
+  margin: 1rem 0 0;
+  color: var(--ok-text);
+  font-weight: 600;
 }
