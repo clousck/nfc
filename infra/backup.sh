@@ -10,7 +10,7 @@
 # Variables (con sus valores por defecto):
 #   DB_PATH=/opt/nfc-admin/data/admin.db
 #   BACKUP_MOUNT=/mnt/usb
-#   BACKUP_ROOT=$BACKUP_MOUNT/backups
+#   BACKUP_ROOT=$BACKUP_MOUNT/backups/nfc-admin   (carpeta propia: la retención solo borra aquí)
 #   RETENTION_DAYS=7
 #   D1_EXPORT=false            # true para activar el export semanal de D1
 #   D1_EXPORT_WEEKDAY=7        # 1 = lunes … 7 = domingo
@@ -23,7 +23,7 @@ set -euo pipefail
 
 DB_PATH="${DB_PATH:-/opt/nfc-admin/data/admin.db}"
 BACKUP_MOUNT="${BACKUP_MOUNT:-/mnt/usb}"
-BACKUP_ROOT="${BACKUP_ROOT:-$BACKUP_MOUNT/backups}"
+BACKUP_ROOT="${BACKUP_ROOT:-$BACKUP_MOUNT/backups/nfc-admin}"
 RETENTION_DAYS="${RETENTION_DAYS:-7}"
 D1_EXPORT="${D1_EXPORT:-false}"
 D1_EXPORT_WEEKDAY="${D1_EXPORT_WEEKDAY:-7}"

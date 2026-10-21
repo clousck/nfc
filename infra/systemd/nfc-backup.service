@@ -6,6 +6,7 @@ RequiresMountsFor=/mnt/usb
 Type=oneshot
 # Opcional: DB_PATH, RETENTION_DAYS, D1_EXPORT, CLOUDFLARE_API_TOKEN, etc.
 EnvironmentFile=-/etc/nfc-backup.env
-ExecStart=/opt/nfc-platform/infra/backup.sh
+# Ruta del repo clonado en la Pi.
+ExecStart=/home/victorees/nfc-platform/infra/backup.sh
 Nice=10
 IOSchedulingClass=idle

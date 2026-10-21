@@ -178,10 +178,12 @@ Considerar a futuro un dominio más corto y neutral (sin "penginexr") para la ma
 | Cuenta Cloudflare | Todo cae | Riesgo aceptado; exportar D1 y KV periódicamente |
 
 **Backups** (`infra/backup.sh`, diario 03:00):
-- `sqlite3 admin.db ".backup /mnt/usb/backups/<fecha>/admin.db"`
+- `sqlite3 admin.db ".backup /mnt/usb/backups/nfc-admin/<fecha>/admin.db"`
 - Verificar que `/mnt/usb` esté montado antes de escribir (si no, abortar).
 - Retener 7 días.
-- Semanal: `wrangler d1 export` → `/mnt/usb/backups/d1/`.
+- Semanal: `wrangler d1 export` → `/mnt/usb/backups/nfc-admin/d1/`.
+
+Los backups del admin van en `/mnt/usb/backups/nfc-admin/` (carpeta propia; la USB tiene otros backups).
 
 La USB es solo destino de backups; la base de datos activa vive en la SD/SSD.
 
