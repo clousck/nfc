@@ -10,6 +10,7 @@
 # Variables (con sus valores por defecto):
 #   DB_PATH=/opt/nfc-admin/data/admin.db
 #   BACKUP_MOUNT=/mnt/usb
+#   BACKUP_LABEL=              # si se define, exige que lo montado tenga esa etiqueta (p. ej. pi-usb)
 #   BACKUP_ROOT=$BACKUP_MOUNT/backups/nfc-admin   (carpeta propia: la retención solo borra aquí)
 #   RETENTION_DAYS=7
 #   D1_EXPORT=false            # true para activar el export semanal de D1
@@ -23,6 +24,7 @@ set -euo pipefail
 
 DB_PATH="${DB_PATH:-/opt/nfc-admin/data/admin.db}"
 BACKUP_MOUNT="${BACKUP_MOUNT:-/mnt/usb}"
+BACKUP_LABEL="${BACKUP_LABEL:-}"
 BACKUP_ROOT="${BACKUP_ROOT:-$BACKUP_MOUNT/backups/nfc-admin}"
 RETENTION_DAYS="${RETENTION_DAYS:-7}"
 D1_EXPORT="${D1_EXPORT:-false}"
@@ -39,8 +41,18 @@ die() {
 
 command -v sqlite3 >/dev/null || die "sqlite3 no está instalado (apt install sqlite3)"
 mountpoint -q "$BACKUP_MOUNT" || die "$BACKUP_MOUNT no está montado; abortando"
+if [[ -n "$BACKUP_LABEL" ]]; then
+  label="$(findmnt -no LABEL "$BACKUP_MOUNT" || true)"
+  [[ "$label" == "$BACKUP_LABEL" ]] ||
+    die "lo montado en $BACKUP_MOUNT tiene etiqueta '$label', se esperaba '$BACKUP_LABEL'; abortando"
+fi
 [[ -f "$DB_PATH" ]] || die "no existe la base de datos $DB_PATH"
 [[ "$RETENTION_DAYS" =~ ^[1-9][0-9]*$ ]] || die "RETENTION_DAYS inválido: $RETENTION_DAYS"
+
+# Los backups contienen datos de clientes: solo legibles por root.
+umask 077
+mkdir -p "$BACKUP_ROOT"
+chmod 700 "$BACKUP_ROOT"
 
 today="$(date +%F)"
 dest="$BACKUP_ROOT/$today"
