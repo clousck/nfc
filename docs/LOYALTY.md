@@ -1,7 +1,8 @@
 # Programa de fidelidad — diseño
 
-> Estado: **primera etapa construida y probada en local; pendiente de publicar** (requiere
-> aplicar la migración `infra/d1/migrations/0002_loyalty.sql` en la D1 de producción).
+> Estado: **primera etapa desplegada** (2026-10-21). Las decisiones «sin login para negocios» y
+> «sin QR en fidelidad» quedan **sustituidas** por [BUSINESS-ACCOUNTS.md](BUSINESS-ACCOUNTS.md)
+> (cuentas de negocio y QR rotativo como prueba de presencia).
 
 ## 1. Objetivo y decisiones
 
