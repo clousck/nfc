@@ -15,16 +15,21 @@ describe('loadConfig', () => {
     expect(config.access).toEqual({ teamDomain: 'equipo.cloudflareaccess.com', aud: 'aud' });
   });
 
-  it('Cloudflare queda deshabilitado si falta alguna credencial', () => {
-    expect(loadConfig({ AUTH_DISABLED: 'true', CF_ACCOUNT_ID: 'a' }).cloudflare).toBeNull();
+  it('sin INTERNAL_API_TOKEN no hay conexión con el Worker; con él, usa la URL pública', () => {
+    expect(loadConfig({ AUTH_DISABLED: 'true' }).edge).toBeNull();
+    const token = 't'.repeat(32);
+    expect(loadConfig({ AUTH_DISABLED: 'true', INTERNAL_API_TOKEN: token }).edge).toEqual({
+      baseUrl: 'https://go.penginexr.com',
+      token,
+    });
     expect(
-      loadConfig({
-        AUTH_DISABLED: 'true',
-        CF_ACCOUNT_ID: 'a',
-        CF_API_TOKEN: 't',
-        CF_KV_LINKS_NAMESPACE_ID: 'n',
-      }).cloudflare,
-    ).toEqual({ accountId: 'a', apiToken: 't', kvLinksNamespaceId: 'n', d1DatabaseId: null });
+      loadConfig({ AUTH_DISABLED: 'true', INTERNAL_API_TOKEN: token, EDGE_URL: 'https://e.ec' })
+        .edge?.baseUrl,
+    ).toBe('https://e.ec');
+  });
+
+  it('rechaza un INTERNAL_API_TOKEN demasiado corto', () => {
+    expect(() => loadConfig({ AUTH_DISABLED: 'true', INTERNAL_API_TOKEN: 'corto' })).toThrow();
   });
 
   it('rechaza PUBLIC_BASE_URL sin https', () => {

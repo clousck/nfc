@@ -11,47 +11,53 @@ afterEach(() => {
   ctx.close();
 });
 
-const DAY = 86_400_000;
-
 async function createBusiness(name = 'Café X') {
   return (await ctx.json<{ id: string }>('POST', '/api/businesses', { name })).body;
 }
 
+let nextCardId = 1;
+
+/** Tarjeta en el Worker simulado (tal como la devolvería tras calcular la caducidad). */
 function addCard(
   businessId: string,
-  card: { name: string; phone: string; stamps: number; lastStampAt: number; marketing: boolean },
+  card: { name: string; phone: string; stamps: number; expired?: boolean; marketing: boolean },
 ) {
+  const id = nextCardId++;
   const now = Date.now();
-  return ctx.scans.sqlite
-    .prepare(
-      `INSERT INTO loyalty_cards (business_id, device_hash, name, phone, consent_card_at,
-         consent_marketing_at, stamps, last_stamp_at, last_stamp_day, created_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, '2026-10-21', ?)`,
-    )
-    .run(
-      businessId,
-      `hash-${card.phone}`,
-      card.name,
-      card.phone,
-      now,
-      card.marketing ? now : null,
-      card.stamps,
-      card.lastStampAt,
-      now,
-    ).lastInsertRowid;
+  ctx.edge.cards.set(businessId, [
+    ...(ctx.edge.cards.get(businessId) ?? []),
+    {
+      id,
+      name: card.name,
+      phone: card.phone,
+      stamps: card.expired ? 0 : card.stamps,
+      expired: card.expired ?? false,
+      lastVisitAt: now,
+      marketing: card.marketing,
+      createdAt: now,
+      redemptions: 0,
+    },
+  ]);
+  if (card.marketing) {
+    ctx.edge.contacts.set(businessId, [
+      ...(ctx.edge.contacts.get(businessId) ?? []),
+      { name: card.name, phone: card.phone, marketingAt: now },
+    ]);
+  }
+  return id;
 }
 
 describe('programa de fidelidad: configuración', () => {
   it('activar el programa publica las visitas del negocio', async () => {
     const business = await createBusiness();
-    expect(ctx.store.data.get(`business:${business.id}`)).toEqual({
+    expect(ctx.edge.data.get(`business:${business.id}`)).toEqual({
       name: 'Café X',
       loyaltyVisits: null,
     });
 
     const res = await ctx.json('PATCH', `/api/businesses/${business.id}`, { loyaltyVisits: 6 });
     expect(res.status).toBe(200);
-    expect(ctx.store.data.get(`business:${business.id}`)).toEqual({
+    expect(ctx.edge.data.get(`business:${business.id}`)).toEqual({
       name: 'Café X',
       loyaltyVisits: 6,
     });
@@ -73,7 +79,7 @@ describe('programa de fidelidad: configuración', () => {
       businessId: business.id,
       type: 'loyalty',
     });
-    expect(ctx.store.data.get(tag.slug)).toEqual({
+    expect(ctx.edge.data.get(tag.slug)).toEqual({
       type: 'loyalty',
       url: null,
       businessId: business.id,
@@ -81,7 +87,7 @@ describe('programa de fidelidad: configuración', () => {
     });
 
     await ctx.json('PATCH', `/api/tags/${tag.slug}`, { targetUrl: 'https://wa.me/593' });
-    expect(ctx.store.link(tag.slug)).toMatchObject({ type: 'loyalty', url: 'https://wa.me/593' });
+    expect(ctx.edge.link(tag.slug)).toMatchObject({ type: 'loyalty', url: 'https://wa.me/593' });
   });
 
   it('los chips de fidelidad no tienen QR', async () => {
@@ -98,7 +104,7 @@ describe('programa de fidelidad: configuración', () => {
   it('borrar el negocio retira sus datos de Cloudflare', async () => {
     const business = await createBusiness();
     await ctx.request('DELETE', `/api/businesses/${business.id}`);
-    expect(ctx.store.data.has(`business:${business.id}`)).toBe(false);
+    expect(ctx.edge.data.has(`business:${business.id}`)).toBe(false);
   });
 });
 
@@ -114,21 +120,15 @@ describe('programa de fidelidad: tarjetas', () => {
     }>;
   }
 
-  it('lista las tarjetas; las caducadas cuentan 0 sellos', async () => {
+  it('lista las tarjetas que calcula el Worker junto a las visitas del negocio', async () => {
     const business = await createBusiness();
     await ctx.json('PATCH', `/api/businesses/${business.id}`, { loyaltyVisits: 6 });
-    addCard(business.id, {
-      name: 'Ana',
-      phone: '+593991111111',
-      stamps: 4,
-      lastStampAt: Date.now(),
-      marketing: true,
-    });
+    addCard(business.id, { name: 'Ana', phone: '+593991111111', stamps: 4, marketing: true });
     addCard(business.id, {
       name: 'Luis',
       phone: '+593992222222',
       stamps: 5,
-      lastStampAt: Date.now() - 100 * DAY,
+      expired: true,
       marketing: false,
     });
 
@@ -147,14 +147,12 @@ describe('programa de fidelidad: tarjetas', () => {
       name: '=HYPERLINK("x")',
       phone: '+593991111111',
       stamps: 1,
-      lastStampAt: Date.now(),
       marketing: true,
     });
     addCard(business.id, {
       name: 'Sin permiso',
       phone: '+593992222222',
       stamps: 1,
-      lastStampAt: Date.now(),
       marketing: false,
     });
 
@@ -164,54 +162,32 @@ describe('programa de fidelidad: tarjetas', () => {
 
     expect(res.headers.get('content-type')).toContain('text/csv');
     expect([...bytes.slice(0, 3)]).toEqual([0xef, 0xbb, 0xbf]); // BOM para Excel
-    expect(csv).toContain('"\'=HYPERLINK(""x"")"');
+    expect(csv).toContain(`"'=HYPERLINK(""x"")"`);
     expect(csv).toContain('+593991111111');
     expect(csv).not.toContain('Sin permiso');
   });
 
-  it('borra una tarjeta a pedido y libera el número', async () => {
+  it('borra una tarjeta a pedido pidiéndoselo al Worker para ese negocio', async () => {
     const business = await createBusiness();
     const id = addCard(business.id, {
       name: 'Ana',
       phone: '+593991111111',
       stamps: 2,
-      lastStampAt: Date.now(),
       marketing: true,
     });
 
     const res = await ctx.request('DELETE', `/api/businesses/${business.id}/loyalty/cards/${id}`);
 
     expect(res.status).toBe(200);
-    const left = ctx.scans.sqlite.prepare('SELECT COUNT(*) AS n FROM loyalty_cards').get() as {
-      n: number;
-    };
-    expect(left.n).toBe(0);
+    expect(ctx.edge.calls).toContain(`DELETE card:${business.id}:${id}`);
+    expect(ctx.edge.cards.get(business.id)).toEqual([]);
   });
 
-  it('no borra tarjetas de otro negocio', async () => {
-    const mine = await createBusiness('Mío');
-    const other = await createBusiness('Otro');
-    const id = addCard(other.id, {
-      name: 'Ana',
-      phone: '+593991111111',
-      stamps: 2,
-      lastStampAt: Date.now(),
-      marketing: true,
-    });
-    await ctx.request('DELETE', `/api/businesses/${mine.id}/loyalty/cards/${id}`);
-    const left = ctx.scans.sqlite.prepare('SELECT COUNT(*) AS n FROM loyalty_cards').get() as {
-      n: number;
-    };
-    expect(left.n).toBe(1);
-  });
-
-  it('explica cómo arreglarlo si la llave no tiene permiso para modificar D1', async () => {
+  it('si el Worker no responde, lo explica con 502', async () => {
     const business = await createBusiness();
-    ctx.scans.query = async () => {
-      throw new Error('Cloudflare API POST /query → 403 (10000: Authentication error)');
-    };
-    const res = await ctx.json('DELETE', `/api/businesses/${business.id}/loyalty/cards/1`);
+    ctx.edge.failing = true;
+    const res = await ctx.json('GET', `/api/businesses/${business.id}/loyalty`);
     expect(res.status).toBe(502);
-    expect(String(res.body['message'])).toContain('de «Read» a «Edit»');
+    expect(String(res.body['message'])).toContain('No se pudo contactar con el Worker');
   });
 });

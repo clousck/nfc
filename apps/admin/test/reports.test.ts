@@ -33,7 +33,7 @@ async function createTag(payload: Record<string, unknown> = {}) {
 }
 
 function report(token: string | null): ReportRecord | undefined {
-  return ctx.store.data.get(`report:${token}`) as ReportRecord | undefined;
+  return ctx.edge.data.get(`report:${token}`) as ReportRecord | undefined;
 }
 
 describe('enlace privado de estadísticas', () => {
@@ -122,7 +122,7 @@ describe('enlace privado de estadísticas', () => {
 
   it('re-sincronizar todo vuelve a publicar los enlaces', async () => {
     const business = await createBusiness();
-    ctx.store.data.clear();
+    ctx.edge.reset(); // Worker vacío, p. ej. recién desplegado
     await ctx.json('POST', '/api/sync');
     expect(report(business.reportToken)?.name).toBe('Café X');
   });

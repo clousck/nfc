@@ -3,12 +3,13 @@ import { join } from 'node:path';
 import { serveStatic } from '@hono/node-server/serve-static';
 import { Hono, type MiddlewareHandler } from 'hono';
 import { logger } from 'hono/logger';
-import type { AppDeps, AppEnv } from './context.js';
+import type { ResyncDto } from './contracts.js';
+import type { AppDeps, AppEnv, RouteDeps } from './context.js';
+import { createPublisher } from './publisher.js';
 import { businessRoutes } from './routes/businesses.js';
 import { loyaltyRoutes } from './routes/loyalty.js';
 import { tagRoutes } from './routes/tags.js';
 import { createServices } from './services/index.js';
-import { resyncAll } from './sync.js';
 
 export interface CreateAppOptions extends AppDeps {
   /** Middleware de autenticación para `/api/*`; `null` la desactiva (solo desarrollo). */
@@ -28,9 +29,11 @@ export function createApp(options: CreateAppOptions) {
 
   if (auth) app.use('/api/*', auth);
 
-  const routeDeps = {
-    ...createServices(deps),
-    scanStore: deps.scanStore,
+  const publisher = deps.publisher ?? createPublisher({ db: deps.db, edge: deps.edge });
+  const routeDeps: RouteDeps = {
+    ...createServices({ db: deps.db, publisher }),
+    edge: deps.edge,
+    publisher,
     publicBaseUrl: deps.publicBaseUrl,
   };
   app.route('/api/businesses', businessRoutes(routeDeps));
@@ -39,12 +42,15 @@ export function createApp(options: CreateAppOptions) {
 
   app.post('/api/sync', async (c) => {
     try {
-      const result = await resyncAll(deps.db, deps.linkStore);
-      return c.json({ ok: true, ...result });
+      const body: ResyncDto = { ok: true, ...(await publisher.resyncAll()) };
+      return c.json(body);
     } catch (err) {
       return c.json({ ok: false, error: err instanceof Error ? err.message : String(err) }, 502);
     }
   });
+
+  /** Cambios que aún no llegaron al Worker (se reintentan solos). */
+  app.get('/api/sync/status', (c) => c.json(publisher.status()));
 
   if (staticDir) {
     // Los assets llevan hash en el nombre: se pueden cachear para siempre.

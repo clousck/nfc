@@ -1,108 +1,162 @@
-import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
-import Database from 'better-sqlite3';
-import type { LinkRecord } from '@nfc/shared';
+import {
+  projectAll,
+  type ApplyResponse,
+  type BusinessState,
+  type KvValue,
+  type LinkRecord,
+  type LoyaltyCardsResponse,
+  type LoyaltyContactsResponse,
+  type SyncBody,
+  type TagScanStatsResponse,
+  type TagState,
+} from '@nfc/shared';
 import type { MiddlewareHandler } from 'hono';
 import { createApp } from '../server/app.js';
-import type { KvEntry, KvValue, LinkStore, ScanStore } from '../server/cloudflare.js';
 import type { AppEnv } from '../server/context.js';
 import { openDb } from '../server/db/client.js';
+import { EdgeError, type EdgeClient } from '../server/edge-client.js';
+import { createPublisher } from '../server/publisher.js';
 
 const migrationsFolder = fileURLToPath(new URL('../drizzle', import.meta.url));
-const d1MigrationsDir = new URL('../../../infra/d1/migrations/', import.meta.url);
-const d1Migration = readdirSync(d1MigrationsDir)
-  .filter((f) => f.endsWith('.sql'))
-  .sort()
-  .map((f) => readFileSync(new URL(f, d1MigrationsDir), 'utf8'))
-  .join('\n');
 
-/** D1 simulada: ejecuta el mismo SQL sobre SQLite en memoria con las migraciones reales. */
-export class FakeScanStore implements ScanStore {
-  readonly sqlite = new Database(':memory:');
+type Card = LoyaltyCardsResponse['cards'][number];
+
+/**
+ * Worker simulado en memoria. Guarda la copia del plano de control con las mismas reglas de
+ * revisión y calcula KV con la proyección real (`projectAll`), así los tests comprueban lo
+ * que de verdad acabaría en KV. `failing = true` simula que el Worker no responde.
+ */
+export class FakeEdge implements EdgeClient {
+  businesses = new Map<string, BusinessState>();
+  tags = new Map<string, TagState>();
+  private readonly revisions = new Map<string, number>();
   failing = false;
+  /** Llamadas recibidas, p. ej. 'PUT tag:abc1234'. */
+  readonly calls: string[] = [];
+  scanStats = new Map<string, TagScanStatsResponse>();
+  cards = new Map<string, Card[]>();
+  contacts = new Map<string, LoyaltyContactsResponse['contacts']>();
 
-  constructor() {
-    this.sqlite.exec(d1Migration);
+  /** Contenido de KV que produciría el Worker. */
+  get data(): Map<string, KvValue> {
+    const all = projectAll([...this.businesses.values()], [...this.tags.values()]);
+    return new Map([...all].map(([key, { value }]) => [key, value]));
   }
 
-  async query<T>(sql: string, params: ReadonlyArray<string | number> = []): Promise<T[]> {
-    if (this.failing) throw new Error('D1 caída');
-    const stmt = this.sqlite.prepare(sql);
-    // Como la API de D1: las sentencias sin resultados (DELETE/UPDATE) devuelven [].
-    if (!stmt.reader) {
-      stmt.run(...params);
-      return [];
-    }
-    return stmt.all(...params) as T[];
-  }
-
-  add(scan: {
-    slug: string;
-    ts: number;
-    source?: 'nfc' | 'qr';
-    os?: 'ios' | 'android' | 'other';
-    city?: string;
-    isBot?: boolean;
-  }) {
-    this.sqlite
-      .prepare(
-        'INSERT INTO scans (slug, ts, source, os, country, city, is_bot) VALUES (?, ?, ?, ?, ?, ?, ?)',
-      )
-      .run(
-        scan.slug,
-        scan.ts,
-        scan.source ?? 'nfc',
-        scan.os ?? 'ios',
-        'EC',
-        scan.city ?? 'Ibarra',
-        scan.isBot ? 1 : 0,
-      );
-  }
-}
-
-/** KV en memoria; `failing = true` simula una caída de la API de Cloudflare. */
-export class FakeLinkStore implements LinkStore {
-  readonly data = new Map<string, KvValue>();
-  failing = false;
-
-  private check() {
-    if (this.failing) throw new Error('Cloudflare API caída');
-  }
-
-  async putMany(entries: readonly KvEntry[]) {
-    this.check();
-    for (const { key, value } of entries) this.data.set(key, value);
-  }
-
-  /** Registro de chip publicado bajo `slug`. */
   link(slug: string): LinkRecord | undefined {
     return this.data.get(slug) as LinkRecord | undefined;
   }
 
-  /** Claves de chips (sin enlaces de estadísticas). */
+  /** Claves de chips (sin negocios ni enlaces de estadísticas). */
   linkKeys(): string[] {
     return [...this.data.keys()].filter((key) => !key.includes(':'));
   }
 
-  async deleteMany(keys: readonly string[]) {
-    this.check();
-    for (const key of keys) this.data.delete(key);
+  /** Simula un Worker vacío (p. ej. recién desplegado). */
+  reset(): void {
+    this.businesses.clear();
+    this.tags.clear();
+    this.revisions.clear();
   }
 
-  async listKeys() {
-    this.check();
-    return [...this.data.keys()];
+  private check(call: string): void {
+    this.calls.push(call);
+    if (this.failing) throw new EdgeError('No se pudo contactar con el Worker (simulado)', 0);
+  }
+
+  private apply(key: string, revision: number, change: () => void): ApplyResponse {
+    if ((this.revisions.get(key) ?? -1) >= revision) {
+      return { applied: false, written: 0, deleted: 0 };
+    }
+    this.revisions.set(key, revision);
+    change();
+    return { applied: true, written: 1, deleted: 0 };
+  }
+
+  async putBusiness(business: BusinessState, revision: number) {
+    this.check(`PUT business:${business.id}`);
+    return this.apply(`business:${business.id}`, revision, () =>
+      this.businesses.set(business.id, business),
+    );
+  }
+
+  async deleteBusiness(id: string, revision: number) {
+    this.check(`DELETE business:${id}`);
+    return this.apply(`business:${id}`, revision, () => this.businesses.delete(id));
+  }
+
+  async putTag(tag: TagState, revision: number) {
+    this.check(`PUT tag:${tag.slug}`);
+    return this.apply(`tag:${tag.slug}`, revision, () => this.tags.set(tag.slug, tag));
+  }
+
+  async deleteTag(slug: string, revision: number) {
+    this.check(`DELETE tag:${slug}`);
+    return this.apply(`tag:${slug}`, revision, () => this.tags.delete(slug));
+  }
+
+  async sync(body: SyncBody) {
+    this.check('POST sync');
+    this.businesses = new Map(body.businesses.map((b) => [b.id, b]));
+    this.tags = new Map(body.tags.map((t) => [t.slug, t]));
+    const keys = [...this.data.keys()];
+    return {
+      tags: keys.filter((k) => !k.includes(':')).length,
+      businesses: keys.filter((k) => k.startsWith('business:')).length,
+      reports: keys.filter((k) => k.startsWith('report:')).length,
+      written: keys.length,
+      deleted: 0,
+    };
+  }
+
+  async tagScans(slug: string, since: number | null) {
+    this.check(`GET scans:${slug}`);
+    return (
+      this.scanStats.get(slug) ?? {
+        since,
+        total: 0,
+        nfc: 0,
+        qr: 0,
+        ios: 0,
+        android: 0,
+        other: 0,
+        bots: 0,
+        lastAt: null,
+        recent: [],
+      }
+    );
+  }
+
+  async loyaltyCards(businessId: string) {
+    this.check(`GET cards:${businessId}`);
+    return { cards: this.cards.get(businessId) ?? [] };
+  }
+
+  async loyaltyContacts(businessId: string) {
+    this.check(`GET contacts:${businessId}`);
+    return { contacts: this.contacts.get(businessId) ?? [] };
+  }
+
+  async deleteLoyaltyCard(businessId: string, cardId: number) {
+    this.check(`DELETE card:${businessId}:${cardId}`);
+    const list = this.cards.get(businessId) ?? [];
+    this.cards.set(
+      businessId,
+      list.filter((c) => c.id !== cardId),
+    );
+    return list.some((c) => c.id === cardId);
   }
 }
 
 export function setup(auth: MiddlewareHandler<AppEnv> | null = null) {
   const { db, close } = openDb(':memory:', migrationsFolder);
-  const store = new FakeLinkStore();
-  const scans = new FakeScanStore();
+  const edge = new FakeEdge();
+  const publisher = createPublisher({ db, edge });
   const app = createApp({
     db,
-    linkStore: store,
-    scanStore: scans,
+    edge,
+    publisher,
     publicBaseUrl: 'https://go.penginexr.com',
     auth,
   });
@@ -123,16 +177,5 @@ export function setup(auth: MiddlewareHandler<AppEnv> | null = null) {
     return { status: res.status, body: (await res.json()) as T };
   }
 
-  return {
-    app,
-    db,
-    close: () => {
-      close();
-      scans.sqlite.close();
-    },
-    store,
-    scans,
-    request,
-    json,
-  };
+  return { app, db, close, edge, publisher, request, json };
 }

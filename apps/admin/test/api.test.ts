@@ -95,7 +95,7 @@ describe('negocios', () => {
   it('pausar un negocio publica sus chips como inactivos', async () => {
     const business = await createBusiness();
     const tag = await createTag({ businessId: business.id, targetUrl: 'https://g.page/r/X' });
-    expect(ctx.store.link(tag.slug)?.active).toBe(true);
+    expect(ctx.edge.link(tag.slug)?.active).toBe(true);
 
     const res = await ctx.json<{ sync: { ok: boolean } }>(
       'PATCH',
@@ -103,7 +103,7 @@ describe('negocios', () => {
       { status: 'paused' },
     );
     expect(res.body.sync.ok).toBe(true);
-    expect(ctx.store.link(tag.slug)).toEqual({
+    expect(ctx.edge.link(tag.slug)).toEqual({
       type: 'redirect',
       url: 'https://g.page/r/X',
       businessId: business.id,
@@ -122,7 +122,7 @@ describe('chips', () => {
       nfc: `https://go.penginexr.com/${tag.slug}`,
       qr: `https://go.penginexr.com/${tag.slug}?s=q`,
     });
-    expect(ctx.store.linkKeys()).toEqual([]);
+    expect(ctx.edge.linkKeys()).toEqual([]);
   });
 
   it('asignar un chip con destino lo publica en KV y marca synced_at', async () => {
@@ -139,7 +139,7 @@ describe('chips', () => {
     expect(res.body.published).toBe(true);
     expect(res.body.sync.ok).toBe(true);
     expect(res.body.syncedAt).toEqual(expect.any(Number));
-    expect(ctx.store.link(tag.slug)).toEqual({
+    expect(ctx.edge.link(tag.slug)).toEqual({
       type: 'redirect',
       url: 'https://wa.me/593999999999',
       businessId: business.id,
@@ -151,14 +151,14 @@ describe('chips', () => {
     const business = await createBusiness();
     const tag = await createTag({ businessId: business.id, targetUrl: 'https://a.example.com' });
     await ctx.json('PATCH', `/api/tags/${tag.slug}`, { targetUrl: 'https://b.example.com' });
-    expect(ctx.store.link(tag.slug)).toMatchObject({ url: 'https://b.example.com' });
+    expect(ctx.edge.link(tag.slug)).toMatchObject({ url: 'https://b.example.com' });
   });
 
   it('liberar un chip lo elimina de KV', async () => {
     const business = await createBusiness();
     const tag = await createTag({ businessId: business.id, targetUrl: 'https://a.example.com' });
     await ctx.json('PATCH', `/api/tags/${tag.slug}`, { businessId: null });
-    expect(ctx.store.data.has(tag.slug)).toBe(false);
+    expect(ctx.edge.data.has(tag.slug)).toBe(false);
   });
 
   it('rechaza destinos que no sean https', async () => {
@@ -171,16 +171,26 @@ describe('chips', () => {
     expect(res.status).toBe(422);
   });
 
-  it('si Cloudflare falla, guarda en SQLite y reporta el error sin synced_at', async () => {
+  it('si el Worker falla, guarda, deja el cambio en cola y lo publica al reintentar', async () => {
     const business = await createBusiness();
-    ctx.store.failing = true;
+    ctx.edge.failing = true;
 
     const tag = await createTag({ businessId: business.id, targetUrl: 'https://a.example.com' });
 
-    expect(tag.sync).toEqual({ ok: false, error: 'Cloudflare API caída' });
+    expect(tag.sync).toEqual({
+      ok: false,
+      error: 'No se pudo contactar con el Worker (simulado)',
+    });
     expect(tag.syncedAt).toBeNull();
     const stored = await ctx.json<TagBody>('GET', `/api/tags/${tag.slug}`);
     expect(stored.body.targetUrl).toBe('https://a.example.com');
+    const status = await ctx.json<{ pending: number; failing: number }>('GET', '/api/sync/status');
+    expect(status.body).toMatchObject({ pending: 1, failing: 1 });
+
+    ctx.edge.failing = false;
+    await ctx.publisher.publish([`tag:${tag.slug}`]);
+    expect(ctx.edge.link(tag.slug)).toMatchObject({ url: 'https://a.example.com' });
+    expect((await ctx.json('GET', '/api/sync/status')).body).toMatchObject({ pending: 0 });
   });
 
   it('filtra por negocio y por inventario', async () => {
@@ -208,7 +218,7 @@ describe('chips', () => {
     const tag = await createTag({ businessId: business.id, targetUrl: 'https://a.example.com' });
     const res = await ctx.request('DELETE', `/api/tags/${tag.slug}`);
     expect(res.status).toBe(200);
-    expect(ctx.store.data.has(tag.slug)).toBe(false);
+    expect(ctx.edge.data.has(tag.slug)).toBe(false);
     expect((await ctx.request('GET', `/api/tags/${tag.slug}`)).status).toBe(404);
   });
 });
@@ -247,72 +257,46 @@ describe('número de chip', () => {
 });
 
 describe('escaneos', () => {
-  interface Stats {
-    since: number | null;
-    total: number;
-    nfc: number;
-    qr: number;
-    ios: number;
-    android: number;
-    other: number;
-    bots: number;
-    lastAt: number | null;
-    recent: Array<{ ts: number; source: string; os: string; city: string }>;
-  }
+  const stats = (since: number | null, total: number) => ({
+    since,
+    total,
+    nfc: total,
+    qr: 0,
+    ios: total,
+    android: 0,
+    other: 0,
+    bots: 0,
+    lastAt: null,
+    recent: [],
+  });
 
-  it('resume los escaneos del chip sin contar bots', async () => {
+  it('pide al Worker los escaneos desde la asignación del chip', async () => {
     const business = await createBusiness();
     const tag = await createTag({ businessId: business.id, targetUrl: 'https://a.example.com' });
-    const t0 = Date.now();
-    ctx.scans.add({ slug: tag.slug, ts: t0 + 1, source: 'nfc', os: 'ios' });
-    ctx.scans.add({ slug: tag.slug, ts: t0 + 2, source: 'qr', os: 'android', city: 'Quito' });
-    ctx.scans.add({ slug: tag.slug, ts: t0 + 3, source: 'nfc', os: 'other' });
-    ctx.scans.add({ slug: tag.slug, ts: t0 + 4, isBot: true });
-    ctx.scans.add({ slug: 'otroChp', ts: t0 + 5 });
+    const assigned = await ctx.json<{ assignedAt: number }>('GET', `/api/tags/${tag.slug}`);
+    ctx.edge.scanStats.set(tag.slug, stats(assigned.body.assignedAt, 3));
 
-    const res = await ctx.json<Stats>('GET', `/api/tags/${tag.slug}/scans`);
+    const res = await ctx.json<{ total: number }>('GET', `/api/tags/${tag.slug}/scans`);
 
     expect(res.status).toBe(200);
-    expect(res.body).toMatchObject({
-      total: 3,
-      nfc: 2,
-      qr: 1,
-      ios: 1,
-      android: 1,
-      other: 1,
-      bots: 1,
-      lastAt: t0 + 3,
-    });
-    expect(res.body.recent.map((s) => s.ts)).toEqual([t0 + 3, t0 + 2, t0 + 1]);
-    expect(res.body.recent[1]).toMatchObject({ source: 'qr', os: 'android', city: 'Quito' });
+    expect(res.body.total).toBe(3);
+    expect(ctx.edge.calls).toContain(`GET scans:${tag.slug}`);
   });
 
-  it('un chip sin escaneos devuelve ceros', async () => {
-    const tag = await createTag();
-    const res = await ctx.json<Stats>('GET', `/api/tags/${tag.slug}/scans`);
-    expect(res.body).toMatchObject({ total: 0, nfc: 0, qr: 0, bots: 0, lastAt: null, recent: [] });
-  });
-
-  it('al reasignar el chip, el nuevo negocio no ve escaneos anteriores', async () => {
+  it('al reasignar el chip, la fecha desde la que se cuenta cambia', async () => {
     const first = await createBusiness('Negocio A');
     const second = await createBusiness('Negocio B');
     const tag = await createTag({ businessId: first.id, targetUrl: 'https://a.example.com' });
-    ctx.scans.add({ slug: tag.slug, ts: Date.now() - 1000 });
-
-    const before = await ctx.json<Stats>('GET', `/api/tags/${tag.slug}/scans`);
-    expect(before.body.total).toBe(0); // escaneo previo a la asignación
+    const before = await ctx.json<{ assignedAt: number }>('GET', `/api/tags/${tag.slug}`);
 
     await new Promise((r) => setTimeout(r, 5));
-    const patched = await ctx.json<TagBody & { assignedAt: number }>(
-      'PATCH',
-      `/api/tags/${tag.slug}`,
-      { businessId: second.id },
-    );
-    ctx.scans.add({ slug: tag.slug, ts: patched.body.assignedAt + 1 });
+    const patched = await ctx.json<{ assignedAt: number }>('PATCH', `/api/tags/${tag.slug}`, {
+      businessId: second.id,
+    });
+    expect(patched.body.assignedAt).toBeGreaterThan(before.body.assignedAt);
 
-    const after = await ctx.json<Stats>('GET', `/api/tags/${tag.slug}/scans`);
-    expect(after.body.since).toBe(patched.body.assignedAt);
-    expect(after.body.total).toBe(1);
+    const res = await ctx.json<{ since: number }>('GET', `/api/tags/${tag.slug}/scans`);
+    expect(res.body.since).toBe(patched.body.assignedAt);
   });
 
   it('editar otros campos no reinicia el conteo', async () => {
@@ -324,12 +308,12 @@ describe('escaneos', () => {
     expect(updated.body.assignedAt).toBe(original.body.assignedAt);
   });
 
-  it('si D1 falla responde 502 con el motivo', async () => {
+  it('si el Worker falla responde 502 con el motivo', async () => {
     const tag = await createTag();
-    ctx.scans.failing = true;
+    ctx.edge.failing = true;
     const res = await ctx.json('GET', `/api/tags/${tag.slug}/scans`);
     expect(res.status).toBe(502);
-    expect(String(res.body['message'])).toContain('D1 caída');
+    expect(String(res.body['message'])).toContain('No se pudo contactar con el Worker');
   });
 });
 
@@ -365,30 +349,27 @@ describe('re-sincronizar todo', () => {
     const business = await createBusiness();
     const tag = await createTag({ businessId: business.id, targetUrl: 'https://a.example.com' });
     await createTag(); // inventario: no se publica
-    ctx.store.data.clear();
-    ctx.store.data.set('orphan1', {
-      type: 'redirect',
-      url: 'https://old.example.com',
+    // El Worker conoce un chip que ya no existe en la Pi.
+    ctx.edge.tags.set('orphan1', {
+      slug: 'orphan1',
+      number: 99,
       businessId: business.id,
+      assignedAt: null,
+      label: null,
+      type: 'redirect',
+      targetUrl: 'https://old.example.com',
       active: true,
     });
 
     const res = await ctx.json('POST', '/api/sync');
 
-    // 1 chip + 1 enlace de estadísticas + 1 registro del negocio; la clave huérfana se borra.
-    expect(res.body).toEqual({
-      ok: true,
-      published: 3,
-      tags: 1,
-      businesses: 1,
-      reports: 1,
-      deleted: 1,
-    });
-    expect(ctx.store.linkKeys()).toEqual([tag.slug]);
+    // 1 chip + 1 enlace de estadísticas + 1 registro del negocio; el chip huérfano desaparece.
+    expect(res.body).toMatchObject({ ok: true, published: 3, tags: 1, businesses: 1, reports: 1 });
+    expect(ctx.edge.linkKeys()).toEqual([tag.slug]);
   });
 
-  it('responde 502 si Cloudflare falla', async () => {
-    ctx.store.failing = true;
+  it('responde 502 si el Worker falla', async () => {
+    ctx.edge.failing = true;
     const res = await ctx.json('POST', '/api/sync');
     expect(res.status).toBe(502);
     expect(res.body['ok']).toBe(false);

@@ -1,9 +1,9 @@
 import { buildTagUrls } from '@nfc/shared';
 import { Hono } from 'hono';
 import QRCode from 'qrcode';
+import type { TagScanStats } from '../contracts.js';
 import type { AppEnv, RouteDeps } from '../context.js';
 import { toTagDto } from '../presenters.js';
-import { getTagScanStats } from '../scans.js';
 import type {
   CreateTagResult,
   DeleteTagResult,
@@ -37,7 +37,7 @@ const fail = errorResponder<TagError>({
   },
 });
 
-export function tagRoutes({ tags, scanStore, publicBaseUrl }: RouteDeps) {
+export function tagRoutes({ tags, edge, publicBaseUrl }: RouteDeps) {
   const app = new Hono<AppEnv>();
   const dto = ({ tag, published }: TagWithStatus) => toTagDto(tag, published, publicBaseUrl);
 
@@ -75,17 +75,9 @@ export function tagRoutes({ tags, scanStore, publicBaseUrl }: RouteDeps) {
   app.get('/:slug/scans', async (c) => {
     const found = tags.get(c.req.param('slug'));
     if (!found) return fail(c, 'not_found');
-    if (!scanStore) {
-      return c.json(
-        {
-          error: 'scans_unavailable',
-          message: 'Las estadísticas no están configuradas (CF_D1_DATABASE_ID).',
-        },
-        503,
-      );
-    }
     try {
-      return c.json(await getTagScanStats(scanStore, found.tag.slug, found.tag.assignedAt));
+      const stats: TagScanStats = await edge.tagScans(found.tag.slug, found.tag.assignedAt);
+      return c.json(stats);
     } catch (err) {
       return c.json(
         {

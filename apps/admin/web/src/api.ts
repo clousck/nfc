@@ -4,6 +4,7 @@ import type {
   BusinessDto,
   LoyaltyCardDto,
   LoyaltyDto,
+  PublishStatusDto,
   ResyncDto,
   SyncResult,
   TagDto,
@@ -122,6 +123,7 @@ export const api = {
     request<{ deleted: string; sync: SyncResult }>('DELETE', `/api/tags/${slug}`),
 
   resync: () => request<ResyncDto>('POST', '/api/sync'),
+  syncStatus: () => request<PublishStatusDto>('GET', '/api/sync/status'),
 };
 
 export function qrUrl(slug: string, format: 'svg' | 'png', download = false): string {

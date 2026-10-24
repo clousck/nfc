@@ -43,7 +43,7 @@ export function NoticeProvider({ children }: { children: ReactNode }) {
         if (sync && !sync.ok) {
           notify(
             'warning',
-            `Guardado, pero no se publicó en Cloudflare: ${sync.error}. Usa "Re-sincronizar todo" cuando se resuelva.`,
+            `Guardado. Aún no se publicó en Cloudflare (${sync.error}); se reintentará automáticamente.`,
           );
         } else {
           notify('success', successText);

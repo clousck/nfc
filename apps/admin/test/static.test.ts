@@ -5,7 +5,7 @@ import { fileURLToPath } from 'node:url';
 import { afterAll, describe, expect, it } from 'vitest';
 import { createApp } from '../server/app.js';
 import { openDb } from '../server/db/client.js';
-import { FakeLinkStore } from './helpers.js';
+import { FakeEdge } from './helpers.js';
 
 const dir = mkdtempSync(join(tmpdir(), 'nfc-ui-'));
 mkdirSync(join(dir, 'assets'));
@@ -15,8 +15,7 @@ writeFileSync(join(dir, 'assets', 'index-abc123.js'), 'console.log(1)');
 const { db, close } = openDb(':memory:', fileURLToPath(new URL('../drizzle', import.meta.url)));
 const app = createApp({
   db,
-  linkStore: new FakeLinkStore(),
-  scanStore: null,
+  edge: new FakeEdge(),
   publicBaseUrl: 'https://go.penginexr.com',
   auth: null,
   staticDir: dir,

@@ -1,7 +1,9 @@
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { BrowserRouter, Link, Navigate, NavLink, Route, Routes, useNavigate } from 'react-router';
 import { api, ApiError } from './api';
+import { useResource } from './hooks';
 import { NoticeProvider, useNotices } from './notices';
+import { Badge } from './ui';
 import { BusinessesPage } from './pages/BusinessesPage';
 import { BusinessPage } from './pages/BusinessPage';
 import { ChipsPage } from './pages/ChipsPage';
@@ -30,6 +32,14 @@ export function App() {
 function Header() {
   const { notify, reportError } = useNotices();
   const [syncing, setSyncing] = useState(false);
+  const [tick, setTick] = useState(0);
+  const status = useResource(api.syncStatus, `sync-status:${tick}`);
+
+  // Los cambios pendientes se reintentan solos en la Pi; aquí solo se muestra cuántos quedan.
+  useEffect(() => {
+    const timer = setInterval(() => setTick((t) => t + 1), 30_000);
+    return () => clearInterval(timer);
+  }, []);
 
   async function resync() {
     if (!confirm('¿Re-publicar todos los chips en Cloudflare desde la base local?')) return;
@@ -38,14 +48,17 @@ function Header() {
       const result = await api.resync();
       notify(
         'success',
-        `Sincronizado: ${result.tags} chips, ${result.businesses} negocios y ${result.reports} enlaces de estadísticas publicados; ${result.deleted} claves sobrantes eliminadas.`,
+        `Sincronizado: ${result.tags} chips, ${result.businesses} negocios y ${result.reports} enlaces de estadísticas publicados (${result.written} escrituras en Cloudflare); ${result.deleted} claves sobrantes eliminadas.`,
       );
     } catch (err) {
       reportError(err);
     } finally {
       setSyncing(false);
+      setTick((t) => t + 1);
     }
   }
+
+  const pending = status.data?.pending ?? 0;
 
   return (
     <header className="header">
@@ -61,6 +74,13 @@ function Header() {
             Chips
           </NavLink>
         </nav>
+        {pending > 0 ? (
+          <span title={status.data?.lastError ?? 'Publicando…'}>
+            <Badge tone="warn">
+              {pending === 1 ? '1 cambio pendiente' : `${pending} cambios pendientes`}
+            </Badge>
+          </span>
+        ) : null}
         <GoToChip />
         <button type="button" className="button button-small" onClick={resync} disabled={syncing}>
           {syncing ? 'Sincronizando…' : 'Re-sincronizar todo'}

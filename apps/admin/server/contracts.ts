@@ -60,8 +60,18 @@ export interface ResyncDto {
   businesses: number;
   /** Enlaces de estadísticas `report:<token>`. */
   reports: number;
+  /** Escrituras reales en KV (solo lo que cambió). */
+  written: number;
   /** Claves sobrantes eliminadas. */
   deleted: number;
+}
+
+/** Cambios guardados que aún no llegaron al Worker (se reintentan solos). */
+export interface PublishStatusDto {
+  pending: number;
+  failing: number;
+  lastError: string | null;
+  nextAttemptAt: number | null;
 }
 
 export interface RecentScanDto {

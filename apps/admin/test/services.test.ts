@@ -3,22 +3,26 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { openDb } from '../server/db/client.js';
 import type { Business, Tag } from '../server/db/schema.js';
 import { toBusinessDto, toTagDto } from '../server/presenters.js';
+import { createPublisher } from '../server/publisher.js';
 import { createServices, type Services } from '../server/services/index.js';
-import { FakeLinkStore } from './helpers.js';
+import { FakeEdge } from './helpers.js';
 
 const migrationsFolder = fileURLToPath(new URL('../drizzle', import.meta.url));
 
 // Los servicios se prueban sin HTTP: entra un dato, sale un resultado con tipo.
 describe('servicios', () => {
   let services: Services;
-  let store: FakeLinkStore;
+  let edge: FakeEdge;
   let close: () => void;
 
   beforeEach(() => {
     const opened = openDb(':memory:', migrationsFolder);
     close = opened.close;
-    store = new FakeLinkStore();
-    services = createServices({ db: opened.db, linkStore: store });
+    edge = new FakeEdge();
+    services = createServices({
+      db: opened.db,
+      publisher: createPublisher({ db: opened.db, edge }),
+    });
   });
 
   afterEach(() => close());
@@ -100,7 +104,7 @@ describe('servicios', () => {
     const bySlug = new Map(services.tags.list().map((row) => [row.tag.slug, row.published]));
     expect(bySlug.get(live.slug)).toBe(true);
     expect(bySlug.get(free.slug)).toBe(false);
-    expect(store.link(live.slug)?.active).toBe(true);
+    expect(edge.link(live.slug)?.active).toBe(true);
   });
 });
 

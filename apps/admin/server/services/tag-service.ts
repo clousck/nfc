@@ -1,11 +1,10 @@
-import { generateSlug } from '@nfc/shared';
+import { generateSlug, projectTag } from '@nfc/shared';
 import { and, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import type { z } from 'zod';
-import type { LinkStore } from '../cloudflare.js';
 import type { SyncResult } from '../contracts.js';
 import type { Db } from '../db/client.js';
 import { businesses, tagCounter, tags, type Business, type Tag } from '../db/schema.js';
-import { syncBusinesses, syncTags, toLinkRecord, unpublish } from '../sync.js';
+import { tagEntity, type Publisher } from '../publisher.js';
 import type { TagCreate, TagUpdate } from '../validation.js';
 
 export type TagCreateInput = z.output<typeof TagCreate>;
@@ -50,7 +49,7 @@ function isUniqueViolation(err: unknown): boolean {
 }
 
 /** Inventario de chips: alta, asignación, bloqueo físico y borrado. */
-export function createTagService({ db, linkStore }: { db: Db; linkStore: LinkStore }) {
+export function createTagService({ db, publisher }: { db: Db; publisher: Publisher }) {
   const findTag = (slug: string) => db.select().from(tags).where(eq(tags.slug, slug)).get();
 
   const findBusiness = (id: string) =>
@@ -63,7 +62,7 @@ export function createTagService({ db, linkStore }: { db: Db; linkStore: LinkSto
         : tag.businessId
           ? (findBusiness(tag.businessId) ?? null)
           : null;
-    return { tag, published: toLinkRecord(tag, owner) !== null };
+    return { tag, published: projectTag(tag, owner) !== null };
   };
 
   return {
@@ -111,7 +110,7 @@ export function createTagService({ db, linkStore }: { db: Db; linkStore: LinkSto
               })
               .returning()
               .get();
-            return tx
+            const tag = tx
               .insert(tags)
               .values({
                 ...input,
@@ -122,6 +121,8 @@ export function createTagService({ db, linkStore }: { db: Db; linkStore: LinkSto
               })
               .returning()
               .get();
+            publisher.enqueue(tx, [tagEntity(tag.slug)]);
+            return tag;
           });
         } catch (err) {
           if (!isUniqueViolation(err)) throw err;
@@ -129,7 +130,7 @@ export function createTagService({ db, linkStore }: { db: Db; linkStore: LinkSto
       }
       if (!created) return { ok: false, error: 'slug_generation_failed' };
 
-      const sync = await syncTags(db, linkStore, [created.slug]);
+      const sync = await publisher.publish([tagEntity(created.slug)]);
       return { ok: true, sync, ...withStatus(findTag(created.slug) ?? created) };
     },
 
@@ -144,11 +145,14 @@ export function createTagService({ db, linkStore }: { db: Db; linkStore: LinkSto
       const changes = reassigned
         ? { ...patch, assignedAt: patch.businessId ? Date.now() : null }
         : patch;
-      if (Object.keys(changes).length > 0) {
-        db.update(tags).set(changes).where(eq(tags.slug, slug)).run();
-      }
-      // También se actualiza el enlace de estadísticas del negocio anterior si cambió.
-      const sync = await syncTags(db, linkStore, [slug], [current.businessId]);
+      db.transaction((tx) => {
+        if (Object.keys(changes).length > 0) {
+          tx.update(tags).set(changes).where(eq(tags.slug, slug)).run();
+        }
+        // El Worker recalcula también el enlace de estadísticas del negocio anterior.
+        publisher.enqueue(tx, [tagEntity(slug)]);
+      });
+      const sync = await publisher.publish([tagEntity(slug)]);
       const tag = findTag(slug);
       if (!tag) return { ok: false, error: 'not_found' };
       return { ok: true, sync, ...withStatus(tag) };
@@ -174,11 +178,12 @@ export function createTagService({ db, linkStore }: { db: Db; linkStore: LinkSto
       if (!tag) return { ok: false, error: 'not_found' };
       // Regla: un chip bloqueado tiene su URL grabada para siempre; se desactiva o reasigna.
       if (tag.lockedAt) return { ok: false, error: 'locked' };
-      db.delete(tags).where(eq(tags.slug, slug)).run();
-      const removed = await unpublish(linkStore, [slug]);
-      if (!removed.ok || !tag.businessId) return { ok: true, sync: removed };
-      // Su negocio pierde el chip en el enlace de estadísticas.
-      return { ok: true, sync: await syncBusinesses(db, linkStore, [tag.businessId]) };
+      db.transaction((tx) => {
+        tx.delete(tags).where(eq(tags.slug, slug)).run();
+        // El Worker lo retira de KV y del enlace de estadísticas de su negocio.
+        publisher.enqueue(tx, [tagEntity(slug)]);
+      });
+      return { ok: true, sync: await publisher.publish([tagEntity(slug)]) };
     },
 
     /** Chip para el que se puede generar el QR impreso. */

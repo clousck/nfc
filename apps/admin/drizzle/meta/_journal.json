@@ -36,6 +36,13 @@
       "when": 1792581106038,
       "tag": "0004_loyalty",
       "breakpoints": true
+    },
+    {
+      "idx": 5,
+      "version": "6",
+      "when": 1792829511287,
+      "tag": "0005_publish_queue",
+      "breakpoints": true
     }
   ]
 }

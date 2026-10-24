@@ -1,5 +1,5 @@
-import type { LinkStore } from '../cloudflare.js';
 import type { Db } from '../db/client.js';
+import type { Publisher } from '../publisher.js';
 import { createBusinessService, type BusinessService } from './business-service.js';
 import { createTagService, type TagService } from './tag-service.js';
 
@@ -8,7 +8,7 @@ export interface Services {
   tags: TagService;
 }
 
-export function createServices(deps: { db: Db; linkStore: LinkStore }): Services {
+export function createServices(deps: { db: Db; publisher: Publisher }): Services {
   return {
     businesses: createBusinessService(deps),
     tags: createTagService(deps),

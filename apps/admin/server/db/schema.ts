@@ -66,5 +66,20 @@ export const landings = sqliteTable('landings', {
   syncedAt: integer('synced_at'),
 });
 
+/**
+ * Cola de publicación (patrón outbox): entidades cuyo estado falta enviar al Worker. Se
+ * escribe en la misma transacción que el cambio, así ningún cambio se pierde aunque falle
+ * internet o se reinicie la Pi.
+ */
+export const publishQueue = sqliteTable('publish_queue', {
+  entity: text('entity').primaryKey(), // 'tag:<slug>' | 'business:<id>'
+  // Sube con cada cambio: si la entidad cambió durante un envío, la nota no se borra.
+  seq: integer('seq').notNull(),
+  attempts: integer('attempts').notNull().default(0),
+  nextAttemptAt: integer('next_attempt_at').notNull(),
+  lastError: text('last_error'),
+  createdAt: integer('created_at').notNull(),
+});
+
 export type Business = typeof businesses.$inferSelect;
 export type Tag = typeof tags.$inferSelect;
