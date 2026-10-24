@@ -111,6 +111,9 @@ importers:
 
   apps/edge:
     dependencies:
+      '@hono/zod-validator':
+        specifier: ^0.9.1
+        version: 0.9.1(hono@4.13.13)(zod@4.6.7)
       '@nfc/shared':
         specifier: workspace:*
         version: link:../../packages/shared
@@ -120,6 +123,9 @@ importers:
       qrcode-generator:
         specifier: ^2.0.4
         version: 2.0.4
+      zod:
+        specifier: ^4.6.7
+        version: 4.6.7
     devDependencies:
       '@cloudflare/vitest-plugin':
         specifier: ^1.4.6

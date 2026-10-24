@@ -1,0 +1,104 @@
+import { z } from 'zod';
+import { BusinessState, TagState } from './projection.js';
+import { DeviceOs, ScanSource } from './schemas.js';
+
+// Contrato de la API interna del Worker (`/internal/*`), que solo usa la Pi.
+// Ambos lados validan con estos esquemas: lo que la Pi envía y lo que el Worker responde.
+
+export const INTERNAL_PREFIX = '/internal';
+
+/**
+ * Orden de los cambios: el Worker ignora un envío cuya revisión no sea mayor que la que ya
+ * tiene, así un reintento atrasado nunca pisa un cambio más nuevo.
+ */
+export const Revision = z.number().int().nonnegative();
+
+export const PutBusinessBody = BusinessState.extend({ revision: Revision });
+export type PutBusinessBody = z.infer<typeof PutBusinessBody>;
+
+export const PutTagBody = TagState.extend({ revision: Revision });
+export type PutTagBody = z.infer<typeof PutTagBody>;
+
+export const DeleteQuery = z.object({ revision: z.coerce.number().int().nonnegative() });
+
+/** Foto completa del plano de control para "Re-sincronizar todo". */
+export const SyncBody = z.object({
+  revision: Revision,
+  businesses: z.array(BusinessState).max(5_000),
+  tags: z.array(TagState).max(20_000),
+});
+export type SyncBody = z.infer<typeof SyncBody>;
+
+export const ApplyResponse = z.object({
+  /** false = el Worker ya tenía una revisión igual o más nueva y no cambió nada. */
+  applied: z.boolean(),
+  /** Escrituras y borrados reales en KV (solo lo que cambió). */
+  written: z.number().int().nonnegative(),
+  deleted: z.number().int().nonnegative(),
+});
+export type ApplyResponse = z.infer<typeof ApplyResponse>;
+
+export const SyncResponse = z.object({
+  /** Claves publicadas por tipo tras la sincronización. */
+  tags: z.number().int().nonnegative(),
+  businesses: z.number().int().nonnegative(),
+  reports: z.number().int().nonnegative(),
+  written: z.number().int().nonnegative(),
+  deleted: z.number().int().nonnegative(),
+});
+export type SyncResponse = z.infer<typeof SyncResponse>;
+
+export const ScanStatsQuery = z.object({
+  since: z.coerce.number().int().nonnegative().optional(),
+  recent: z.coerce.number().int().min(0).max(100).default(20),
+});
+
+export const TagScanStatsResponse = z.object({
+  since: z.number().int().nonnegative().nullable(),
+  total: z.number().int().nonnegative(),
+  nfc: z.number().int().nonnegative(),
+  qr: z.number().int().nonnegative(),
+  ios: z.number().int().nonnegative(),
+  android: z.number().int().nonnegative(),
+  other: z.number().int().nonnegative(),
+  /** Visitas de crawlers (vistas previas de WhatsApp, etc.): no cuentan en el total. */
+  bots: z.number().int().nonnegative(),
+  lastAt: z.number().int().nullable(),
+  recent: z.array(
+    z.object({
+      ts: z.number().int(),
+      source: ScanSource,
+      os: DeviceOs.nullable(),
+      country: z.string().nullable(),
+      city: z.string().nullable(),
+    }),
+  ),
+});
+export type TagScanStatsResponse = z.infer<typeof TagScanStatsResponse>;
+
+export const LoyaltyCardsResponse = z.object({
+  cards: z.array(
+    z.object({
+      id: z.number().int(),
+      name: z.string(),
+      phone: z.string(),
+      /** Sellos que cuentan ahora (0 si caducó). */
+      stamps: z.number().int().nonnegative(),
+      expired: z.boolean(),
+      lastVisitAt: z.number().int().nullable(),
+      marketing: z.boolean(),
+      createdAt: z.number().int(),
+      redemptions: z.number().int().nonnegative(),
+    }),
+  ),
+});
+export type LoyaltyCardsResponse = z.infer<typeof LoyaltyCardsResponse>;
+
+export const LoyaltyContactsResponse = z.object({
+  contacts: z.array(
+    z.object({ name: z.string(), phone: z.string(), marketingAt: z.number().int() }),
+  ),
+});
+export type LoyaltyContactsResponse = z.infer<typeof LoyaltyContactsResponse>;
+
+export const DeleteCardResponse = z.object({ deleted: z.boolean() });

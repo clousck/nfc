@@ -47,7 +47,7 @@ export function localDay(ms: number, offsetMinutes: number): string {
 }
 
 /** ¿La tarjeta caducó por pasar 90 días sin visitas? */
-export function isExpired(card: Card, now: number): boolean {
+export function isExpired(card: Pick<Card, 'lastStampAt'>, now: number): boolean {
   return card.lastStampAt !== null && now - card.lastStampAt > EXPIRY_MS;
 }
 

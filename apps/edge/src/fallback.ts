@@ -31,3 +31,11 @@ export const FALLBACK_HTML = `<!doctype html>
 </main>
 </body>
 </html>`;
+
+/** Respuesta con la página genérica; nunca se cachea (el chip puede reactivarse). */
+export function fallbackResponse(status: 404 | 503 = 404): Response {
+  return new Response(FALLBACK_HTML, {
+    status,
+    headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': 'no-store' },
+  });
+}

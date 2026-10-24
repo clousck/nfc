@@ -8,7 +8,8 @@ import {
   SOURCE_PARAM,
 } from '@nfc/shared';
 import type { Env } from './env.js';
-import { FALLBACK_HTML } from './fallback.js';
+import { fallbackResponse as fallback } from './fallback.js';
+import { internalRoutes } from './internal/routes.js';
 import { handleLoyaltyTap, loyaltyRoutes } from './loyalty/routes.js';
 import { colorOfDay } from './loyalty/pages.js';
 import { readCookie, STAFF_COOKIE } from './loyalty/security.js';
@@ -21,13 +22,6 @@ const app = new Hono<{ Bindings: Env }>();
 
 // Las respuestas no se cachean: el destino puede cambiar y cada escaneo debe llegar al Worker.
 const NO_STORE = 'no-store';
-
-function fallback(status: 404 | 503 = 404): Response {
-  return new Response(FALLBACK_HTML, {
-    status,
-    headers: { 'content-type': 'text/html; charset=utf-8', 'cache-control': NO_STORE },
-  });
-}
 
 async function readLink(kv: KVNamespace, slug: string): Promise<LinkRecord | null> {
   const raw = await kv.get(slug, 'json');
@@ -76,6 +70,9 @@ app.get('/r/:token', async (c) => {
     },
   });
 });
+
+// API interna para la Pi (plano de control). Sin token válido responde 404.
+app.route('/internal', internalRoutes);
 
 // Fidelidad: alta, tarjeta, canje, validación y baja (rutas de varios segmentos).
 app.route('/', loyaltyRoutes);

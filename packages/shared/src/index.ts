@@ -4,3 +4,5 @@ export * from './user-agent.js';
 export * from './urls.js';
 export * from './report.js';
 export * from './loyalty.js';
+export * from './projection.js';
+export * from './internal-api.js';
