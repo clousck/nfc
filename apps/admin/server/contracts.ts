@@ -97,6 +97,30 @@ export interface TagScanStats {
   recent: RecentScanDto[];
 }
 
+export interface RateLimitIncidentDto {
+  businessId: string | null;
+  /** Nombre del negocio, o null si no se supo a cuál iba la petición. */
+  businessName: string | null;
+  /** Día local YYYY-MM-DD. */
+  day: string;
+  action: 'signup' | 'redeem' | 'validate';
+  actor: 'customer' | 'staff' | 'anonymous';
+  scope: 'device' | 'network' | 'staff';
+  mode: 'observe' | 'enforce';
+  /** Minutos distintos en los que se superó el límite. */
+  minutes: number;
+  /** Orígenes distintos. */
+  sources: number;
+  lastAt: number;
+}
+
+export interface RateLimitIncidentsDto {
+  /** observe = solo se registra; enforce = se bloquea. */
+  mode: 'observe' | 'enforce';
+  days: number;
+  incidents: RateLimitIncidentDto[];
+}
+
 export interface LoyaltyCardDto {
   id: number;
   name: string;

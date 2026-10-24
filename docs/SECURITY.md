@@ -88,7 +88,7 @@ Por su naturaleza, cada control es **técnico** (código/configuración), **admi
 | Cambios no publicados en KV                  | Cola de publicación con reintentos                    | Hecho    |
 | Fichero CSV con fórmulas                     | Escapado de `= + - @`                                 | Hecho    |
 
-## 4. Rate limiting _(Planeado)_
+## 4. Rate limiting (hecho, en modo observación)
 
 Mecanismo: contador por **clave** dentro de una ventana fija de 60 s (binding `ratelimits` de
 Cloudflare; ventanas permitidas: 10 o 60 s). Los contadores son por centro de datos y

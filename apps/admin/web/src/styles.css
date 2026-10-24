@@ -672,13 +672,15 @@ a.list-item:hover {
   margin: 0;
 }
 
-.loyalty-table {
+.loyalty-table,
+.data-table {
   width: 100%;
   border-collapse: collapse;
   font-size: 0.9rem;
 }
 
-.loyalty-table th {
+.loyalty-table th,
+.data-table th {
   text-align: left;
   font-size: 0.8rem;
   color: var(--muted);
@@ -686,7 +688,8 @@ a.list-item:hover {
   border-bottom: 1px solid var(--border);
 }
 
-.loyalty-table td {
+.loyalty-table td,
+.data-table td {
   padding: 0.5rem;
   border-bottom: 1px solid var(--border);
   vertical-align: top;

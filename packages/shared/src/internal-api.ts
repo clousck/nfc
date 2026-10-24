@@ -102,3 +102,31 @@ export const LoyaltyContactsResponse = z.object({
 export type LoyaltyContactsResponse = z.infer<typeof LoyaltyContactsResponse>;
 
 export const DeleteCardResponse = z.object({ deleted: z.boolean() });
+
+export const IncidentsQuery = z.object({
+  businessId: z.string().optional(),
+  days: z.coerce.number().int().min(1).max(90).default(30),
+});
+
+/** Resumen de incidentes de límite de peticiones (docs/SECURITY.md §4). */
+export const RateLimitIncidentsResponse = z.object({
+  mode: z.enum(['observe', 'enforce']),
+  incidents: z.array(
+    z.object({
+      /** '' = no se supo a qué negocio iba. */
+      businessId: z.string(),
+      /** Día local YYYY-MM-DD. */
+      day: z.string(),
+      action: z.enum(['signup', 'redeem', 'validate']),
+      actor: z.enum(['customer', 'staff', 'anonymous']),
+      scope: z.enum(['device', 'network', 'staff']),
+      mode: z.enum(['observe', 'enforce']),
+      /** Minutos distintos en los que se superó el límite. */
+      minutes: z.number().int().nonnegative(),
+      /** Orígenes distintos (un solo origen insistiendo suele ser un script). */
+      sources: z.number().int().nonnegative(),
+      lastAt: z.number().int(),
+    }),
+  ),
+});
+export type RateLimitIncidentsResponse = z.infer<typeof RateLimitIncidentsResponse>;

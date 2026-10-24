@@ -2,6 +2,7 @@ import { zValidator } from '@hono/zod-validator';
 import {
   BusinessId,
   DeleteQuery,
+  IncidentsQuery,
   PutBusinessBody,
   PutTagBody,
   ScanStatsQuery,
@@ -11,6 +12,7 @@ import {
 import { Hono } from 'hono';
 import { z } from 'zod';
 import type { Env } from '../env.js';
+import { incidentSummary } from '../rate-limit.js';
 import { internalAuth } from './auth.js';
 import { deleteBusiness, deleteTag, putBusiness, putTag, syncAll } from './control-plane.js';
 import { deleteCardOfBusiness, loyaltyCards, loyaltyContacts, tagScanStats } from './queries.js';
@@ -81,6 +83,12 @@ internalRoutes.delete(
     return c.json({ deleted: await deleteCardOfBusiness(c.env.DB, id, cardId) });
   },
 );
+
+/** Incidentes de límite de peticiones (de un negocio o de todos). */
+internalRoutes.get('/incidents', json('query', IncidentsQuery), async (c) => {
+  const { businessId, days } = c.req.valid('query');
+  return c.json(await incidentSummary(c.env, businessId ?? null, days, Date.now()));
+});
 
 internalRoutes.onError((err, c) => {
   console.error('Error en /internal', String(err));

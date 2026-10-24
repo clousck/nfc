@@ -12,6 +12,7 @@ import {
 import { Hono, type Context } from 'hono';
 import type { Env } from '../env.js';
 import { pageHeaders, STRICT_CSP } from '../html.js';
+import { allowRequest, clientIp } from '../rate-limit.js';
 import {
   cardPage,
   colorOfDay,
@@ -86,6 +87,13 @@ async function currentCard(c: AppContext, businessId: string) {
   const token = readDeviceToken(c.req.raw);
   if (!token) return null;
   return findCard(c.env.DB, businessId, await hashToken(token));
+}
+
+/** Límite de peticiones superado (solo en modo `enforce`). */
+function tooMany(): Response {
+  return html(messagePage('Demasiados intentos', 'Espera un minuto y vuelve a intentarlo.'), 429, {
+    'retry-after': '60',
+  });
 }
 
 function notAvailable(): Response {
@@ -209,6 +217,29 @@ loyaltyRoutes.post('/l/:slug/registro', async (c) => {
   const deviceHash = await hashToken(token);
   const cookie = { 'set-cookie': cookieHeader(DEVICE_COOKIE, token) };
 
+  // Un móvil nuevo aún no tiene cookie: para él solo cuenta el límite por red.
+  const allowed = await allowRequest(c.env, c.executionCtx, [
+    ...(existingToken
+      ? [
+          {
+            action: 'signup',
+            scope: 'device',
+            actor: 'customer',
+            key: deviceHash,
+            businessId: link.businessId,
+          } as const,
+        ]
+      : []),
+    {
+      action: 'signup',
+      scope: 'network',
+      actor: 'customer',
+      key: `${clientIp(c.req.raw)}:${link.businessId}`,
+      businessId: link.businessId,
+    },
+  ]);
+  if (!allowed) return tooMany();
+
   if (existingToken && (await findCard(c.env.DB, link.businessId, deviceHash))) {
     return redirect(`/l/tarjeta/${link.businessId}`, cookie);
   }
@@ -274,6 +305,16 @@ loyaltyRoutes.post('/l/canjear/:businessId', async (c) => {
   if (!business?.loyaltyVisits) return notAvailable();
   const card = await currentCard(c, businessId);
   if (!card) return redirect(`/l/tarjeta/${businessId}`);
+  const allowed = await allowRequest(c.env, c.executionCtx, [
+    {
+      action: 'redeem',
+      scope: 'device',
+      actor: 'customer',
+      key: await hashToken(readDeviceToken(c.req.raw) ?? ''),
+      businessId,
+    },
+  ]);
+  if (!allowed) return tooMany();
   const code = await redeem(c.env.DB, card, {
     visitsRequired: business.loyaltyVisits,
     now: Date.now(),
@@ -344,6 +385,25 @@ async function staffReport(c: AppContext): Promise<ReportRecord | null> {
 /** El cajero escanea el QR del cliente con la cámara: abre esta URL en su móvil. */
 loyaltyRoutes.get('/v/:code', async (c) => {
   const report = await staffReport(c);
+  // El personal (cookie de validador) tiene 3× el límite público.
+  const allowed = await allowRequest(c.env, c.executionCtx, [
+    report
+      ? {
+          action: 'validate',
+          scope: 'staff',
+          actor: 'staff',
+          key: await hashToken(readCookie(c.req.raw, STAFF_COOKIE) ?? ''),
+          businessId: report.businessId,
+        }
+      : {
+          action: 'validate',
+          scope: 'network',
+          actor: 'anonymous',
+          key: clientIp(c.req.raw),
+          businessId: null,
+        },
+  ]);
+  if (!allowed) return tooMany();
   if (!report) return html(validationPage(null, { kind: 'not_staff' }));
   const code = parseRedemptionCode(c.req.param('code'));
   const redemption = code ? await findRedemption(c.env.DB, code) : null;

@@ -8,6 +8,35 @@ routes = [{ pattern = "go.penginexr.com", custom_domain = true }]
 [vars]
 # Ecuador no tiene horario de verano: UTC-5 fijo.
 REPORT_TZ_OFFSET_MINUTES = "-300"
+# observe = registra lo que se habría bloqueado, pero deja pasar. enforce = bloquea (429).
+# Pasar a enforce tras revisar 2–4 semanas de incidentes (docs/SECURITY.md §4).
+RATE_LIMIT_MODE = "observe"
+
+# Limpieza diaria (03:00 de Ecuador): incidentes de más de 90 días y sales de días pasados.
+[triggers]
+crons = ["0 8 * * *"]
+
+# Límites de peticiones (ventana de 60 s; contadores por centro de datos, aproximados).
+# namespace_id: entero único por límite dentro de la cuenta.
+[[ratelimits]]
+name = "RL_DEVICE"        # por móvil (cookie): alta y canje
+namespace_id = "1001"
+simple = { limit = 10, period = 60 }
+
+[[ratelimits]]
+name = "RL_NETWORK"       # por IP + negocio: red de seguridad contra scripts
+namespace_id = "1002"
+simple = { limit = 30, period = 60 }
+
+[[ratelimits]]
+name = "RL_STAFF"         # personal validando canjes: 3× el límite público
+namespace_id = "1003"
+simple = { limit = 90, period = 60 }
+
+[[ratelimits]]
+name = "RL_INCIDENT_LOG"  # como mucho 1 incidente registrado por minuto y origen
+namespace_id = "1004"
+simple = { limit = 1, period = 60 }
 
 [observability]
 enabled = true

@@ -5,6 +5,7 @@ import type {
   LoyaltyCardDto,
   LoyaltyDto,
   PublishStatusDto,
+  RateLimitIncidentsDto,
   ResyncDto,
   SyncResult,
   TagDto,
@@ -123,6 +124,9 @@ export const api = {
     request<{ deleted: string; sync: SyncResult }>('DELETE', `/api/tags/${slug}`),
 
   resync: () => request<ResyncDto>('POST', '/api/sync'),
+  getIncidents: () => request<RateLimitIncidentsDto>('GET', '/api/incidents'),
+  getBusinessIncidents: (id: string) =>
+    request<RateLimitIncidentsDto>('GET', `/api/businesses/${id}/incidents`),
   syncStatus: () => request<PublishStatusDto>('GET', '/api/sync/status'),
 };
 

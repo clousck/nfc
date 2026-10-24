@@ -7,6 +7,7 @@ import {
   type LinkRecord,
   type LoyaltyCardsResponse,
   type LoyaltyContactsResponse,
+  type RateLimitIncidentsResponse,
   type SyncBody,
   type TagScanStatsResponse,
   type TagState,
@@ -37,6 +38,7 @@ export class FakeEdge implements EdgeClient {
   scanStats = new Map<string, TagScanStatsResponse>();
   cards = new Map<string, Card[]>();
   contacts = new Map<string, LoyaltyContactsResponse['contacts']>();
+  incidentList: RateLimitIncidentsResponse['incidents'] = [];
 
   /** Contenido de KV que produciría el Worker. */
   get data(): Map<string, KvValue> {
@@ -136,6 +138,16 @@ export class FakeEdge implements EdgeClient {
   async loyaltyContacts(businessId: string) {
     this.check(`GET contacts:${businessId}`);
     return { contacts: this.contacts.get(businessId) ?? [] };
+  }
+
+  async incidents(businessId: string | null) {
+    this.check(`GET incidents:${businessId ?? '*'}`);
+    return {
+      mode: 'observe' as const,
+      incidents: this.incidentList.filter(
+        (i) => businessId === null || i.businessId === businessId,
+      ),
+    };
   }
 
   async deleteLoyaltyCard(businessId: string, cardId: number) {

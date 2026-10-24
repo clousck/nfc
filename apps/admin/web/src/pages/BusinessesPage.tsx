@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router';
 import { api, type Business } from '../api';
 import { useResource } from '../hooks';
+import { RateLimitIncidents } from '../components/RateLimitIncidents';
 import { useNotices } from '../notices';
 import { BusinessStatusBadge, emptyToNull, LoadError, Loading, PLAN_LABELS } from '../ui';
 
@@ -57,6 +58,8 @@ export function BusinessesPage() {
           <BusinessRow key={b.id} business={b} />
         ))}
       </ul>
+
+      <RateLimitIncidents />
     </>
   );
 }

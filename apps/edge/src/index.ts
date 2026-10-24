@@ -14,6 +14,7 @@ import { handleLoyaltyTap, loyaltyRoutes } from './loyalty/routes.js';
 import { colorOfDay } from './loyalty/pages.js';
 import { readCookie, STAFF_COOKIE } from './loyalty/security.js';
 import { localDay, loyaltySummary } from './loyalty/store.js';
+import { cleanupRateLimits } from './rate-limit.js';
 import { loadReport, queryReportStats } from './report.js';
 import { renderReportPage, type ReportLoyalty } from './report-page.js';
 import { buildScanEvent, recordScan } from './scan.js';
@@ -125,4 +126,10 @@ app.onError((err) => {
   return fallback(503);
 });
 
-export default app;
+export default {
+  fetch: app.fetch,
+  /** Cron diario (wrangler.toml): limpieza de incidentes viejos y sales de días pasados. */
+  async scheduled(_controller, env, ctx) {
+    ctx.waitUntil(cleanupRateLimits(env.DB, Date.now()));
+  },
+} satisfies ExportedHandler<Env>;

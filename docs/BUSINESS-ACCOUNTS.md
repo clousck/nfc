@@ -269,7 +269,7 @@ Cada fase se entrega en commits separados, con los tests pasando y sin desplegar
 | 0 ✅ | Este diseño y SECURITY.md                                                                                                                       | —              |
 | 1 ✅ | Capa de servicios + DTOs en el admin. CI (checks). CD: deploy del Worker e imagen arm64 en GHCR                                                 | 1, 5           |
 | 2 ✅ | Worker dueño de D1 y único escritor de KV: API interna, tablas de copia, cola de la Pi → API interna, `db.batch`, la Pi sin token de Cloudflare | 2, 3           |
-| 3    | Rate limiting en modo observación + registro de incidentes + vista en el panel                                                                  | 4a             |
+| 3 ✅ | Rate limiting en modo observación + registro de incidentes + vista en el panel                                                                  | 4a             |
 | 4    | Cuentas: enlace mágico, portal, permisos, auditoría, dispositivos del personal (límite 3×), fin de la validación con el enlace de estadísticas  | 4b             |
 | 5    | Módulo de presencia: `static_nfc` (actual) + `rotating_qr`; la fidelidad acepta el QR rotativo                                                  | —              |
 | 6    | `ntag_sun` cuando haya chips NTAG 424/413 DNA; `nfc_counter` opcional                                                                           | —              |

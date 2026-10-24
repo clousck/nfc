@@ -2,6 +2,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { api, type BusinessDetail, type Tag } from '../api';
 import { LoyaltyProgram } from '../components/LoyaltyProgram';
+import { RateLimitIncidents } from '../components/RateLimitIncidents';
 import { ReportLink } from '../components/ReportLink';
 import { useResource } from '../hooks';
 import { useNotices } from '../notices';
@@ -51,6 +52,8 @@ export function BusinessPage() {
       <LoyaltyProgram business={data} onChanged={business.reload} />
 
       <ReportLink business={data} onChanged={business.reload} />
+
+      <RateLimitIncidents businessId={data.id} />
 
       <BusinessForm key={JSON.stringify(data)} business={data} onSaved={business.reload} />
       <DeleteBusiness business={data} />

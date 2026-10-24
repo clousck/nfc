@@ -7,6 +7,7 @@ import type { ResyncDto } from './contracts.js';
 import type { AppDeps, AppEnv, RouteDeps } from './context.js';
 import { createPublisher } from './publisher.js';
 import { businessRoutes } from './routes/businesses.js';
+import { incidentRoutes } from './routes/incidents.js';
 import { loyaltyRoutes } from './routes/loyalty.js';
 import { tagRoutes } from './routes/tags.js';
 import { createServices } from './services/index.js';
@@ -39,6 +40,7 @@ export function createApp(options: CreateAppOptions) {
   app.route('/api/businesses', businessRoutes(routeDeps));
   app.route('/api/businesses', loyaltyRoutes(routeDeps));
   app.route('/api/tags', tagRoutes(routeDeps));
+  app.route('/api', incidentRoutes(routeDeps));
 
   app.post('/api/sync', async (c) => {
     try {

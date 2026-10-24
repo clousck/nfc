@@ -4,6 +4,7 @@ import {
   INTERNAL_PREFIX,
   LoyaltyCardsResponse,
   LoyaltyContactsResponse,
+  RateLimitIncidentsResponse,
   SyncResponse,
   TagScanStatsResponse,
   type BusinessState,
@@ -26,6 +27,8 @@ export interface EdgeClient {
   loyaltyCards(businessId: string): Promise<LoyaltyCardsResponse>;
   loyaltyContacts(businessId: string): Promise<LoyaltyContactsResponse>;
   deleteLoyaltyCard(businessId: string, cardId: number): Promise<boolean>;
+  /** Incidentes de límite de peticiones; businessId null = todos. */
+  incidents(businessId: string | null, days: number): Promise<RateLimitIncidentsResponse>;
 }
 
 export class EdgeError extends Error {
@@ -109,6 +112,12 @@ export function createHttpEdgeClient(options: HttpEdgeOptions): EdgeClient {
     loyaltyCards: (id) => call(LoyaltyCardsResponse, 'GET', `/businesses/${enc(id)}/loyalty/cards`),
     loyaltyContacts: (id) =>
       call(LoyaltyContactsResponse, 'GET', `/businesses/${enc(id)}/loyalty/contacts`),
+    incidents: (businessId, days) =>
+      call(
+        RateLimitIncidentsResponse,
+        'GET',
+        `/incidents?days=${days}${businessId ? `&businessId=${enc(businessId)}` : ''}`,
+      ),
     deleteLoyaltyCard: async (id, cardId) =>
       (await call(DeleteCardResponse, 'DELETE', `/businesses/${enc(id)}/loyalty/cards/${cardId}`))
         .deleted,
@@ -130,5 +139,6 @@ export function createUnconfiguredEdgeClient(): EdgeClient {
     loyaltyCards: fail,
     loyaltyContacts: fail,
     deleteLoyaltyCard: fail,
+    incidents: fail,
   };
 }
