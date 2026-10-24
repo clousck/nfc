@@ -39,7 +39,11 @@ export const TagCreate = z.object({
 });
 
 export const TagUpdate = TagCreate.omit({ type: true })
-  .extend({ type: z.enum(['redirect', 'landing', 'loyalty']).optional() })
+  .extend({
+    type: z.enum(['redirect', 'landing', 'loyalty']).optional(),
+    /** false reactiva un chip que el negocio pausó ("stand perdido"). */
+    paused: z.boolean().optional(),
+  })
   .partial();
 
 export const TagListQuery = z.object({

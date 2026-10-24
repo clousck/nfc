@@ -22,6 +22,7 @@ describe('servicios', () => {
     services = createServices({
       db: opened.db,
       publisher: createPublisher({ db: opened.db, edge }),
+      edge,
     });
   });
 

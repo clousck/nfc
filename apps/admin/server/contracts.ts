@@ -37,6 +37,8 @@ export interface TagDto {
   targetUrl: string | null;
   active: boolean;
   lockedAt: number | null;
+  /** El negocio lo pausó ("stand perdido"): no funciona hasta reactivarlo. */
+  pausedAt: number | null;
   syncedAt: number | null;
   createdAt: number;
   urls: { nfc: string; qr: string };

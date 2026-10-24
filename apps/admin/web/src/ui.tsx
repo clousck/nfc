@@ -39,6 +39,7 @@ export function TagBadges({ tag }: { tag: Tag }) {
       {tag.type === 'loyalty' ? <Badge tone="info">Fidelidad</Badge> : null}
       {tag.active ? <Badge tone="ok">Activo</Badge> : <Badge tone="muted">Inactivo</Badge>}
       {tag.lockedAt ? <Badge tone="info">Bloqueado</Badge> : null}
+      {tag.pausedAt ? <Badge tone="warn">Pausado por el negocio</Badge> : null}
       {tag.businessId && !tag.syncedAt ? <Badge tone="warn">Sin publicar</Badge> : null}
     </>
   );

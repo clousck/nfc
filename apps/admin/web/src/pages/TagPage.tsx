@@ -45,6 +45,8 @@ export function TagPage() {
         </div>
       </div>
 
+      {data.pausedAt && <PausedNotice tag={data} onChanged={tag.reload} />}
+
       {data.businessId && !data.published && (
         <div className="card card-warning">
           Este chip no redirige a ningún lado todavía: falta el destino.
@@ -291,6 +293,37 @@ function TagDangerZone({ tag, onChanged }: { tag: TagView; onChanged: () => void
       </button>
       <button type="button" className="button button-danger" onClick={remove}>
         Borrar chip
+      </button>
+    </div>
+  );
+}
+
+/** El negocio marcó el stand como perdido o dañado: el chip no funciona hasta reactivarlo. */
+function PausedNotice({ tag, onChanged }: { tag: TagView; onChanged: () => void }) {
+  const { reportSync, reportError } = useNotices();
+  const [saving, setSaving] = useState(false);
+
+  async function reactivate() {
+    setSaving(true);
+    try {
+      const result = await api.updateTag(tag.slug, { paused: false });
+      reportSync(result.sync, 'Chip reactivado. El cambio tarda hasta un minuto en verse.');
+      onChanged();
+    } catch (err) {
+      reportError(err);
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <div className="card card-warning">
+      <p>
+        El negocio pausó este chip ({tag.pausedAt ? formatDate(tag.pausedAt) : ''}): stand perdido o
+        dañado. Muestra "Enlace no disponible" hasta que se reactive.
+      </p>
+      <button type="button" className="button" disabled={saving} onClick={() => void reactivate()}>
+        {saving ? 'Reactivando…' : 'Reactivar chip'}
       </button>
     </div>
   );

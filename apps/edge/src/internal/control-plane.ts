@@ -6,11 +6,17 @@ import {
   tagOwner,
   type ApplyResponse,
   type BusinessState,
+  type BusinessSettings,
   type KvValue,
+  type PutBusinessSettingsBody,
+  type PutTagSettingsBody,
+  type SettingsChangesResponse,
   type SyncBody,
   type SyncResponse,
+  type TagSettings,
   type TagState,
 } from '@nfc/shared';
+import { auditStatement, diff, type Actor } from '../audit.js';
 import type { Env } from '../env.js';
 
 // Copia del plano de control en D1 y publicación en KV. El Worker es el único que escribe
@@ -19,6 +25,10 @@ import type { Env } from '../env.js';
 // Límites del plan gratis que condicionan el código: 50 consultas D1 por invocación y 100
 // parámetros por consulta (por eso las escrituras van en INSERT de varias filas), y 1.000
 // escrituras KV al día (por eso se compara con kv_published antes de escribir).
+//
+// Ajustes del negocio (destino, etiqueta, pausa, visitas del premio): su dueño es D1
+// (tag_settings, business_settings). Lo que la Pi envía en esos campos es solo la semilla
+// que se copia al asignar el chip o crear el negocio (ver reconcileSettings).
 
 const MAX_PARAMS = 100;
 
@@ -38,6 +48,9 @@ interface BusinessRow {
   loyalty_visits: number | null;
   revision: number;
   deleted: number;
+  /** De business_settings (LEFT JOIN); s_id NULL = aún sin sembrar. */
+  s_id: string | null;
+  s_loyalty_visits: number | null;
 }
 
 interface TagRow {
@@ -51,26 +64,81 @@ interface TagRow {
   active: number;
   revision: number;
   deleted: number;
+  /** De tag_settings (LEFT JOIN); s_slug NULL = aún sin sembrar. */
+  s_slug: string | null;
+  s_target_url: string | null;
+  s_label: string | null;
+  s_paused_at: number | null;
+  s_updated_at: number | null;
 }
+
+/** Consultas con los ajustes ya aplicados encima de la copia de la Pi. */
+const BUSINESS_SELECT = `SELECT b.*, s.business_id AS s_id, s.loyalty_visits AS s_loyalty_visits
+  FROM business_profile b LEFT JOIN business_settings s ON s.business_id = b.id`;
+const TAG_SELECT = `SELECT t.*, s.slug AS s_slug, s.target_url AS s_target_url, s.label AS s_label,
+    s.paused_at AS s_paused_at, s.updated_at AS s_updated_at
+  FROM tag_inventory t LEFT JOIN tag_settings s ON s.slug = t.slug AND s.business_id = t.business_id`;
+
+type ProjectedTag = TagState & { pausedAt: number | null };
 
 const toBusiness = (r: BusinessRow): BusinessState => ({
   id: r.id,
   name: r.name,
   status: r.status,
   reportToken: r.report_token,
-  loyaltyVisits: r.loyalty_visits,
+  loyaltyVisits: r.s_id !== null ? r.s_loyalty_visits : r.loyalty_visits,
 });
 
-const toTag = (r: TagRow): TagState => ({
-  slug: r.slug,
-  number: r.number,
-  businessId: r.business_id,
-  assignedAt: r.assigned_at,
-  label: r.label,
-  type: r.type,
-  targetUrl: r.target_url,
-  active: r.active === 1,
-});
+const toTag = (r: TagRow): ProjectedTag => {
+  const seeded = r.s_slug !== null;
+  return {
+    slug: r.slug,
+    number: r.number,
+    businessId: r.business_id,
+    assignedAt: r.assigned_at,
+    label: seeded ? r.s_label : r.label,
+    type: r.type,
+    targetUrl: seeded ? r.s_target_url : r.target_url,
+    active: r.active === 1,
+    pausedAt: seeded ? r.s_paused_at : null,
+  };
+};
+
+/**
+ * Siembra y descarte de ajustes tras cada cambio de la Pi (dos pasos por tabla):
+ *   1. Se borran los ajustes de chips borrados o reasignados (o de negocios borrados): el
+ *      destino de un negocio nunca pasa al siguiente.
+ *   2. Los chips asignados y negocios sin ajustes los toman de lo que envió la Pi.
+ * Los ajustes ya existentes no se tocan: un envío de la Pi nunca pisa un cambio del dueño.
+ */
+function reconcileSettings(db: D1Database, now: number): D1PreparedStatement[] {
+  return [
+    db.prepare(
+      `DELETE FROM tag_settings WHERE slug IN (
+         SELECT s.slug FROM tag_settings s LEFT JOIN tag_inventory t ON t.slug = s.slug
+         WHERE t.slug IS NULL OR t.deleted = 1 OR t.business_id IS NOT s.business_id)`,
+    ),
+    db
+      .prepare(
+        `INSERT OR IGNORE INTO tag_settings (slug, business_id, target_url, label, paused_at, updated_at)
+         SELECT slug, business_id, target_url, label, NULL, ? FROM tag_inventory
+         WHERE deleted = 0 AND business_id IS NOT NULL`,
+      )
+      .bind(now),
+    db.prepare(
+      `DELETE FROM business_settings WHERE business_id IN (
+         SELECT s.business_id FROM business_settings s
+         LEFT JOIN business_profile b ON b.id = s.business_id
+         WHERE b.id IS NULL OR b.deleted = 1)`,
+    ),
+    db
+      .prepare(
+        `INSERT OR IGNORE INTO business_settings (business_id, loyalty_visits, updated_at)
+         SELECT id, loyalty_visits, ? FROM business_profile WHERE deleted = 0`,
+      )
+      .bind(now),
+  ];
+}
 
 type Value = string | number | null;
 
@@ -229,16 +297,16 @@ async function publishOwners(
   const [businessRows, tagRows] = await Promise.all([
     ids.length > 0
       ? env.DB.prepare(
-          `SELECT * FROM business_profile WHERE deleted = 0 AND id IN (${placeholders(ids.length)})`,
+          `${BUSINESS_SELECT} WHERE b.deleted = 0 AND b.id IN (${placeholders(ids.length)})`,
         )
           .bind(...ids)
           .all<BusinessRow>()
       : Promise.resolve({ results: [] as BusinessRow[] }),
     ids.length + slugs.length > 0
       ? env.DB.prepare(
-          `SELECT * FROM tag_inventory WHERE deleted = 0 AND (${[
-            ids.length > 0 ? `business_id IN (${placeholders(ids.length)})` : null,
-            slugs.length > 0 ? `slug IN (${placeholders(slugs.length)})` : null,
+          `${TAG_SELECT} WHERE t.deleted = 0 AND (${[
+            ids.length > 0 ? `t.business_id IN (${placeholders(ids.length)})` : null,
+            slugs.length > 0 ? `t.slug IN (${placeholders(slugs.length)})` : null,
           ]
             .filter(Boolean)
             .join(' OR ')})`,
@@ -270,11 +338,11 @@ async function publishOwners(
 }
 
 async function tagRow(db: D1Database, slug: string): Promise<TagRow | null> {
-  return db.prepare('SELECT * FROM tag_inventory WHERE slug = ?').bind(slug).first<TagRow>();
+  return db.prepare(`${TAG_SELECT} WHERE t.slug = ?`).bind(slug).first<TagRow>();
 }
 
 async function businessRow(db: D1Database, id: string): Promise<BusinessRow | null> {
-  return db.prepare('SELECT * FROM business_profile WHERE id = ?').bind(id).first<BusinessRow>();
+  return db.prepare(`${BUSINESS_SELECT} WHERE b.id = ?`).bind(id).first<BusinessRow>();
 }
 
 const NOT_APPLIED: ApplyResponse = { applied: false, written: 0, deleted: 0 };
@@ -282,9 +350,10 @@ const NOT_APPLIED: ApplyResponse = { applied: false, written: 0, deleted: 0 };
 export async function putTag(env: Env, tag: TagState, revision: number): Promise<ApplyResponse> {
   const old = await tagRow(env.DB, tag.slug);
   if (old && old.revision >= revision) return NOT_APPLIED;
-  await env.DB.batch(
-    upserts(env.DB, 'tag_inventory', TAG_COLUMNS, [tagValues(tag, revision)], false),
-  );
+  await env.DB.batch([
+    ...upserts(env.DB, 'tag_inventory', TAG_COLUMNS, [tagValues(tag, revision)], false),
+    ...reconcileSettings(env.DB, Date.now()),
+  ]);
   // El negocio anterior también cambia: su enlace de estadísticas pierde el chip.
   const affected = [old && !old.deleted ? old.business_id : null, tag.businessId];
   const result = await publishOwners(
@@ -298,7 +367,10 @@ export async function putTag(env: Env, tag: TagState, revision: number): Promise
 export async function deleteTag(env: Env, slug: string, revision: number): Promise<ApplyResponse> {
   const old = await tagRow(env.DB, slug);
   if (old && old.revision >= revision) return NOT_APPLIED;
-  await env.DB.batch([tombstone(env.DB, 'tag_inventory', slug, revision)]);
+  await env.DB.batch([
+    tombstone(env.DB, 'tag_inventory', slug, revision),
+    ...reconcileSettings(env.DB, Date.now()),
+  ]);
   const affected = old && !old.deleted && old.business_id ? [old.business_id] : [];
   return { applied: true, ...(await publishOwners(env, affected, [slug])) };
 }
@@ -310,15 +382,16 @@ export async function putBusiness(
 ): Promise<ApplyResponse> {
   const old = await businessRow(env.DB, business.id);
   if (old && old.revision >= revision) return NOT_APPLIED;
-  await env.DB.batch(
-    upserts(
+  await env.DB.batch([
+    ...upserts(
       env.DB,
       'business_profile',
       BUSINESS_COLUMNS,
       [businessValues(business, revision)],
       false,
     ),
-  );
+    ...reconcileSettings(env.DB, Date.now()),
+  ]);
   // Un token regenerado deja el report:<viejo> sin producir: applyKv lo borra.
   return { applied: true, ...(await publishOwners(env, [business.id], [])) };
 }
@@ -330,7 +403,10 @@ export async function deleteBusiness(
 ): Promise<ApplyResponse> {
   const old = await businessRow(env.DB, id);
   if (old && old.revision >= revision) return NOT_APPLIED;
-  await env.DB.batch([tombstone(env.DB, 'business_profile', id, revision)]);
+  await env.DB.batch([
+    tombstone(env.DB, 'business_profile', id, revision),
+    ...reconcileSettings(env.DB, Date.now()),
+  ]);
   return { applied: true, ...(await publishOwners(env, [id], [])) };
 }
 
@@ -375,11 +451,12 @@ export async function syncAll(env: Env, body: SyncBody): Promise<SyncResponse> {
       body.tags.map((t) => tagValues(t, revision)),
       true,
     ),
+    ...reconcileSettings(env.DB, Date.now()),
   ]);
 
   const [businessRows, tagRows, publishedRows, kvKeys] = await Promise.all([
-    env.DB.prepare('SELECT * FROM business_profile WHERE deleted = 0').all<BusinessRow>(),
-    env.DB.prepare('SELECT * FROM tag_inventory WHERE deleted = 0').all<TagRow>(),
+    env.DB.prepare(`${BUSINESS_SELECT} WHERE b.deleted = 0`).all<BusinessRow>(),
+    env.DB.prepare(`${TAG_SELECT} WHERE t.deleted = 0`).all<TagRow>(),
     env.DB.prepare('SELECT key, owner, value FROM kv_published').all<{ key: string } & Published>(),
     listAllKvKeys(env.LINKS),
   ]);
@@ -399,4 +476,140 @@ export async function syncAll(env: Env, body: SyncBody): Promise<SyncResponse> {
     else counts.tags++;
   }
   return { ...counts, written, deleted };
+}
+
+// --- Ajustes del negocio ---
+
+export type SettingsError = 'not_found' | 'not_assigned';
+export type SettingsResult<T> =
+  { ok: true; settings: T; publish: ApplyResponse } | { ok: false; error: SettingsError };
+
+const UNCHANGED: ApplyResponse = { applied: false, written: 0, deleted: 0 };
+
+/** Destino, etiqueta o pausa de un chip asignado; queda en la auditoría y se publica. */
+export async function putTagSettings(
+  env: Env,
+  slug: string,
+  patch: PutTagSettingsBody,
+  actor: Actor,
+  now = Date.now(),
+): Promise<SettingsResult<TagSettings>> {
+  const row = await tagRow(env.DB, slug);
+  if (!row || row.deleted) return { ok: false, error: 'not_found' };
+  const businessId = row.business_id;
+  if (!businessId) return { ok: false, error: 'not_assigned' };
+  const current = toTag(row);
+  const before = { targetUrl: current.targetUrl, label: current.label, pausedAt: current.pausedAt };
+  const after = {
+    targetUrl: patch.targetUrl !== undefined ? patch.targetUrl : before.targetUrl,
+    label: patch.label !== undefined ? patch.label || null : before.label,
+    // Pausar dos veces conserva la fecha de la primera.
+    pausedAt:
+      patch.paused === undefined ? before.pausedAt : patch.paused ? (before.pausedAt ?? now) : null,
+  };
+  const changes = diff(before, after);
+  const settings = (updatedAt: number): TagSettings => ({ slug, businessId, ...after, updatedAt });
+  if (!changes)
+    return { ok: true, settings: settings(row.s_updated_at ?? now), publish: UNCHANGED };
+
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO tag_settings (slug, business_id, target_url, label, paused_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?)
+       ON CONFLICT(slug) DO UPDATE SET business_id = excluded.business_id,
+         target_url = excluded.target_url, label = excluded.label,
+         paused_at = excluded.paused_at, updated_at = excluded.updated_at`,
+    ).bind(slug, businessId, after.targetUrl, after.label, after.pausedAt, now),
+    auditStatement(env.DB, {
+      businessId,
+      actor,
+      action: 'tag.settings',
+      target: slug,
+      ...changes,
+      ts: now,
+    }),
+  ]);
+  // El negocio también: la etiqueta aparece en su enlace de estadísticas.
+  const publish = await publishOwners(env, [businessId], [slug]);
+  return { ok: true, settings: settings(now), publish: { applied: true, ...publish } };
+}
+
+/** Visitas del premio (null desactiva el programa); queda en la auditoría y se publica. */
+export async function putBusinessSettings(
+  env: Env,
+  id: string,
+  patch: PutBusinessSettingsBody,
+  actor: Actor,
+  now = Date.now(),
+): Promise<SettingsResult<BusinessSettings>> {
+  const row = await businessRow(env.DB, id);
+  if (!row || row.deleted) return { ok: false, error: 'not_found' };
+  const before = { loyaltyVisits: toBusiness(row).loyaltyVisits };
+  const after = { loyaltyVisits: patch.loyaltyVisits };
+  const changes = diff(before, after);
+  const settings: BusinessSettings = { businessId: id, ...after, updatedAt: now };
+  if (!changes) return { ok: true, settings, publish: UNCHANGED };
+
+  await env.DB.batch([
+    env.DB.prepare(
+      `INSERT INTO business_settings (business_id, loyalty_visits, updated_at) VALUES (?, ?, ?)
+       ON CONFLICT(business_id) DO UPDATE SET loyalty_visits = excluded.loyalty_visits,
+         updated_at = excluded.updated_at`,
+    ).bind(id, after.loyaltyVisits, now),
+    auditStatement(env.DB, {
+      businessId: id,
+      actor,
+      action: 'business.settings',
+      target: id,
+      ...changes,
+      ts: now,
+    }),
+  ]);
+  const publish = await publishOwners(env, [id], []);
+  return { ok: true, settings, publish: { applied: true, ...publish } };
+}
+
+/** Ajustes cambiados desde `since` (incluido): la Pi los usa para refrescar su copia. */
+export async function settingsChanges(
+  db: D1Database,
+  since: number,
+): Promise<SettingsChangesResponse> {
+  const [tags, businesses] = await Promise.all([
+    db
+      .prepare(
+        `SELECT slug, business_id, target_url, label, paused_at, updated_at FROM tag_settings
+         WHERE updated_at >= ? ORDER BY updated_at`,
+      )
+      .bind(since)
+      .all<{
+        slug: string;
+        business_id: string;
+        target_url: string | null;
+        label: string | null;
+        paused_at: number | null;
+        updated_at: number;
+      }>(),
+    db
+      .prepare(
+        `SELECT business_id, loyalty_visits, updated_at FROM business_settings
+         WHERE updated_at >= ? ORDER BY updated_at`,
+      )
+      .bind(since)
+      .all<{ business_id: string; loyalty_visits: number | null; updated_at: number }>(),
+  ]);
+  return {
+    tags: tags.results.map((r) => ({
+      slug: r.slug,
+      businessId: r.business_id,
+      targetUrl: r.target_url,
+      label: r.label,
+      pausedAt: r.paused_at,
+      updatedAt: r.updated_at,
+    })),
+    businesses: businesses.results.map((r) => ({
+      businessId: r.business_id,
+      loyaltyVisits: r.loyalty_visits,
+      updatedAt: r.updated_at,
+    })),
+  };
 }

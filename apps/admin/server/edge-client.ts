@@ -1,13 +1,18 @@
 import {
   ApplyResponse,
+  BusinessSettings,
   DeleteCardResponse,
   INTERNAL_PREFIX,
   LoyaltyCardsResponse,
   LoyaltyContactsResponse,
   RateLimitIncidentsResponse,
+  SettingsChangesResponse,
   SyncResponse,
   TagScanStatsResponse,
+  TagSettings,
   type BusinessState,
+  type PutBusinessSettingsBody,
+  type PutTagSettingsBody,
   type SyncBody,
   type TagState,
 } from '@nfc/shared';
@@ -23,6 +28,11 @@ export interface EdgeClient {
   putTag(tag: TagState, revision: number): Promise<ApplyResponse>;
   deleteTag(slug: string, revision: number): Promise<ApplyResponse>;
   sync(body: SyncBody): Promise<SyncResponse>;
+  /** Ajustes del negocio (dueño: D1). 409 si el chip no está asignado. */
+  putTagSettings(slug: string, patch: PutTagSettingsBody): Promise<TagSettings>;
+  putBusinessSettings(id: string, patch: PutBusinessSettingsBody): Promise<BusinessSettings>;
+  /** Ajustes cambiados desde `since` (incluido), para refrescar la copia local. */
+  settingsChanges(since: number): Promise<SettingsChangesResponse>;
   tagScans(slug: string, since: number | null): Promise<TagScanStatsResponse>;
   loyaltyCards(businessId: string): Promise<LoyaltyCardsResponse>;
   loyaltyContacts(businessId: string): Promise<LoyaltyContactsResponse>;
@@ -103,6 +113,10 @@ export function createHttpEdgeClient(options: HttpEdgeOptions): EdgeClient {
     deleteTag: (slug, revision) =>
       call(ApplyResponse, 'DELETE', `/tags/${enc(slug)}?revision=${revision}`),
     sync: (body) => call(SyncResponse, 'POST', '/sync', body),
+    putTagSettings: (slug, patch) => call(TagSettings, 'PUT', `/tags/${enc(slug)}/settings`, patch),
+    putBusinessSettings: (id, patch) =>
+      call(BusinessSettings, 'PUT', `/businesses/${enc(id)}/settings`, patch),
+    settingsChanges: (since) => call(SettingsChangesResponse, 'GET', `/settings?since=${since}`),
     tagScans: (slug, since) =>
       call(
         TagScanStatsResponse,
@@ -135,6 +149,9 @@ export function createUnconfiguredEdgeClient(): EdgeClient {
     putTag: fail,
     deleteTag: fail,
     sync: fail,
+    putTagSettings: fail,
+    putBusinessSettings: fail,
+    settingsChanges: fail,
     tagScans: fail,
     loyaltyCards: fail,
     loyaltyContacts: fail,

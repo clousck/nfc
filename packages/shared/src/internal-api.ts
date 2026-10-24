@@ -1,6 +1,7 @@
 import { z } from 'zod';
+import { LoyaltyVisits } from './loyalty.js';
 import { BusinessState, TagState } from './projection.js';
-import { DeviceOs, ScanSource } from './schemas.js';
+import { BusinessId, DeviceOs, ScanSource, Slug, TargetUrl } from './schemas.js';
 
 // Contrato de la API interna del Worker (`/internal/*`), que solo usa la Pi.
 // Ambos lados validan con estos esquemas: lo que la Pi envía y lo que el Worker responde.
@@ -28,6 +29,48 @@ export const SyncBody = z.object({
   tags: z.array(TagState).max(20_000),
 });
 export type SyncBody = z.infer<typeof SyncBody>;
+
+// Ajustes que el negocio puede tocar (dueño: D1). En TagState y BusinessState, `label`,
+// `targetUrl` y `loyaltyVisits` son solo la semilla inicial; después se cambian con estas rutas.
+
+export const PutTagSettingsBody = z
+  .object({
+    targetUrl: TargetUrl.nullable(),
+    label: z.string().trim().max(80).nullable(),
+    paused: z.boolean(),
+  })
+  .partial();
+export type PutTagSettingsBody = z.infer<typeof PutTagSettingsBody>;
+
+export const TagSettings = z.object({
+  slug: Slug,
+  businessId: BusinessId,
+  targetUrl: TargetUrl.nullable(),
+  label: z.string().max(80).nullable(),
+  pausedAt: z.number().int().nullable(),
+  updatedAt: z.number().int(),
+});
+export type TagSettings = z.infer<typeof TagSettings>;
+
+export const PutBusinessSettingsBody = z.object({ loyaltyVisits: LoyaltyVisits.nullable() });
+export type PutBusinessSettingsBody = z.infer<typeof PutBusinessSettingsBody>;
+
+export const BusinessSettings = z.object({
+  businessId: BusinessId,
+  loyaltyVisits: LoyaltyVisits.nullable(),
+  updatedAt: z.number().int(),
+});
+export type BusinessSettings = z.infer<typeof BusinessSettings>;
+
+/** Cambios de ajustes desde `since` (incluido), para que la Pi refresque su copia. */
+export const SettingsChangesQuery = z.object({
+  since: z.coerce.number().int().nonnegative().default(0),
+});
+export const SettingsChangesResponse = z.object({
+  tags: z.array(TagSettings),
+  businesses: z.array(BusinessSettings),
+});
+export type SettingsChangesResponse = z.infer<typeof SettingsChangesResponse>;
 
 export const ApplyResponse = z.object({
   /** false = el Worker ya tenía una revisión igual o más nueva y no cambió nada. */

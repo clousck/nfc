@@ -45,17 +45,20 @@ export interface KvEntry {
 export const tagOwner = (slug: string) => `tag:${slug}`;
 export const businessOwner = (id: string) => `business:${id}`;
 
-type TagFields = Pick<TagState, 'businessId' | 'type' | 'targetUrl' | 'active'>;
+type TagFields = Pick<TagState, 'businessId' | 'type' | 'targetUrl' | 'active'> & {
+  /** "Stand perdido": el dueño lo pausó (ajuste del negocio, vive en D1). */
+  pausedAt?: number | null;
+};
 type BusinessFields = Pick<BusinessState, 'id' | 'status'>;
 
 /**
  * Registro de un chip, o `null` si no debe publicarse (chip en inventario o redirect sin
- * destino). Un negocio pausado o cancelado publica `active: false` para que el Worker
- * muestre la página genérica.
+ * destino). Un negocio pausado o cancelado, o un chip pausado por su dueño, publica
+ * `active: false` para que el Worker muestre la página genérica.
  */
 export function projectTag(tag: TagFields, business: BusinessFields | null): LinkRecord | null {
   if (!tag.businessId || !business || business.id !== tag.businessId) return null;
-  const active = tag.active && business.status === 'active';
+  const active = tag.active && !tag.pausedAt && business.status === 'active';
   if (tag.type === 'redirect') {
     if (!tag.targetUrl) return null;
     return { type: 'redirect', url: tag.targetUrl, businessId: business.id, active };
@@ -101,7 +104,7 @@ export function projectBusiness(
 /** Estado completo de KV a partir de todo el plano de control: clave → { dueño, valor }. */
 export function projectAll(
   businesses: readonly BusinessState[],
-  tags: readonly TagState[],
+  tags: readonly (TagState & { pausedAt?: number | null })[],
 ): Map<string, { owner: string; value: KvValue }> {
   const out = new Map<string, { owner: string; value: KvValue }>();
   const byId = new Map(businesses.map((b) => [b.id, b]));

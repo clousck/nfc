@@ -18,6 +18,7 @@ export const businesses = sqliteTable('businesses', {
   // Token del enlace privado de estadísticas (go.penginexr.com/r/<token>). NULL = sin enlace.
   reportToken: text('report_token').unique(),
   // Programa de fidelidad: visitas necesarias para el premio. NULL = programa desactivado.
+  // Su dueño es D1 (business_settings); aquí es una copia que se refresca sola.
   loyaltyVisits: integer('loyalty_visits'),
   createdAt: integer('created_at').notNull(),
 });
@@ -31,6 +32,8 @@ export const tags = sqliteTable(
     businessId: text('business_id').references(() => businesses.id), // NULL = chip en inventario
     // Cuándo se asignó al negocio actual: las estadísticas cuentan desde aquí. NULL = desde siempre.
     assignedAt: integer('assigned_at'),
+    // label y targetUrl: su dueño es D1 (ajustes del negocio). Aquí son una copia que se
+    // refresca sola, y la semilla que se envía al asignar el chip.
     label: text('label'),
     type: text('type', { enum: ['redirect', 'landing', 'loyalty'] }).notNull(),
     targetUrl: text('target_url'),
@@ -38,6 +41,8 @@ export const tags = sqliteTable(
       .notNull()
       .default(sql`1`),
     lockedAt: integer('locked_at'),
+    // Copia de D1: el dueño lo pausó ("stand perdido"). Ver settings-sync.ts.
+    pausedAt: integer('paused_at'),
     syncedAt: integer('synced_at'),
     createdAt: integer('created_at').notNull(),
   },

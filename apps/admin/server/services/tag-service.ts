@@ -1,10 +1,12 @@
-import { generateSlug, projectTag } from '@nfc/shared';
+import { generateSlug, projectTag, type PutTagSettingsBody } from '@nfc/shared';
 import { and, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
 import type { z } from 'zod';
 import type { SyncResult } from '../contracts.js';
 import type { Db } from '../db/client.js';
 import { businesses, tagCounter, tags, type Business, type Tag } from '../db/schema.js';
+import { EdgeError, type EdgeClient } from '../edge-client.js';
 import { tagEntity, type Publisher } from '../publisher.js';
+import { applyTagSettings } from '../settings-sync.js';
 import type { TagCreate, TagUpdate } from '../validation.js';
 
 export type TagCreateInput = z.output<typeof TagCreate>;
@@ -22,7 +24,8 @@ export type CreateTagResult =
 
 export type UpdateTagResult =
   | ({ ok: true; sync: SyncResult } & TagWithStatus)
-  | { ok: false; error: 'not_found' | 'business_not_found' };
+  | { ok: false; error: 'not_found' | 'business_not_found' }
+  | { ok: false; error: 'edge_unavailable'; detail: string };
 
 export type LockTagResult =
   | ({ ok: true } & TagWithStatus)
@@ -39,6 +42,9 @@ export type TagService = ReturnType<typeof createTagService>;
 
 const MAX_SLUG_ATTEMPTS = 5;
 
+const definedOnly = <T extends Record<string, unknown>>(obj: T): Partial<T> =>
+  Object.fromEntries(Object.entries(obj).filter(([, v]) => v !== undefined)) as Partial<T>;
+
 function isUniqueViolation(err: unknown): boolean {
   return (
     typeof err === 'object' &&
@@ -48,8 +54,29 @@ function isUniqueViolation(err: unknown): boolean {
   );
 }
 
+/**
+ * Ajustes que el negocio también puede cambiar (dueño: D1). Se separan del resto del cambio
+ * para enviarlos al Worker antes de tocar nada aquí.
+ */
+function splitSettings(patch: TagUpdateInput) {
+  const { label, targetUrl, paused, ...inventory } = patch;
+  const settings: PutTagSettingsBody = {};
+  if (label !== undefined) settings.label = label;
+  if (targetUrl !== undefined) settings.targetUrl = targetUrl;
+  if (paused !== undefined) settings.paused = paused;
+  return { settings, inventory, seed: { label, targetUrl } };
+}
+
 /** Inventario de chips: alta, asignación, bloqueo físico y borrado. */
-export function createTagService({ db, publisher }: { db: Db; publisher: Publisher }) {
+export function createTagService({
+  db,
+  publisher,
+  edge,
+}: {
+  db: Db;
+  publisher: Publisher;
+  edge: EdgeClient;
+}) {
   const findTag = (slug: string) => db.select().from(tags).where(eq(tags.slug, slug)).get();
 
   const findBusiness = (id: string) =>
@@ -142,9 +169,31 @@ export function createTagService({ db, publisher }: { db: Db; publisher: Publish
       }
       // Regla: al cambiar de negocio, las estadísticas empiezan de cero para el nuevo.
       const reassigned = patch.businessId !== undefined && patch.businessId !== current.businessId;
-      const changes = reassigned
-        ? { ...patch, assignedAt: patch.businessId ? Date.now() : null }
-        : patch;
+      const { settings, inventory, seed } = splitSettings(patch);
+      let changes: Partial<Tag> = reassigned
+        ? { ...inventory, assignedAt: inventory.businessId ? Date.now() : null }
+        : inventory;
+
+      if (reassigned || !current.businessId) {
+        // Sin negocio (o cambiando de negocio) los ajustes viajan como semilla con el chip:
+        // el Worker descarta los del negocio anterior y siembra estos.
+        changes = { ...changes, ...definedOnly(seed), ...(reassigned ? { pausedAt: null } : {}) };
+      } else if (Object.keys(settings).length > 0) {
+        // Chip asignado: el dueño de los ajustes es D1. Si el Worker no responde, no se guarda
+        // nada (en la cola podría pisar un cambio que el negocio haga mientras tanto).
+        try {
+          applyTagSettings(db, await edge.putTagSettings(slug, settings));
+        } catch (err) {
+          // 404/409 = el Worker aún no tiene el chip o no sabe que es de este negocio (alta o
+          // asignación en la cola): los ajustes van como semilla con el chip.
+          if (err instanceof EdgeError && (err.status === 404 || err.status === 409)) {
+            changes = { ...changes, ...definedOnly(seed) };
+          } else {
+            const detail = err instanceof Error ? err.message : String(err);
+            return { ok: false, error: 'edge_unavailable', detail };
+          }
+        }
+      }
       db.transaction((tx) => {
         if (Object.keys(changes).length > 0) {
           tx.update(tags).set(changes).where(eq(tags.slug, slug)).run();

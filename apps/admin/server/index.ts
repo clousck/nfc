@@ -7,6 +7,7 @@ import { loadConfig } from './config.js';
 import { openDb } from './db/client.js';
 import { createHttpEdgeClient, createUnconfiguredEdgeClient } from './edge-client.js';
 import { createPublisher } from './publisher.js';
+import { createSettingsSync } from './settings-sync.js';
 
 // Tanto en `server/index.ts` (tsx) como en `dist/index.js` (build) queda en ../drizzle.
 const migrationsFolder =
@@ -28,6 +29,8 @@ if (!config.access) {
 const edge = config.edge ? createHttpEdgeClient(config.edge) : createUnconfiguredEdgeClient();
 const publisher = createPublisher({ db, edge });
 const stopRetries = publisher.start();
+// Copia local de lo que los negocios cambian en el portal (dueño: D1).
+const stopSettingsSync = config.edge ? createSettingsSync({ db, edge }).start() : () => {};
 
 const app = createApp({
   db,
@@ -46,6 +49,7 @@ const server = serve({ fetch: app.fetch, port: config.port }, (info) => {
 function shutdown(signal: string) {
   console.log(`[admin] ${signal} recibido, cerrando…`);
   stopRetries();
+  stopSettingsSync();
   server.close(() => {
     close();
     process.exit(0);

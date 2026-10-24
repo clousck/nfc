@@ -1,0 +1,1 @@
+ALTER TABLE `tags` ADD `paused_at` integer;

@@ -59,7 +59,7 @@ const kv = async (key: string) => env.LINKS.get(key, 'json');
 
 beforeEach(async () => {
   await env.DB.exec(
-    'DELETE FROM business_profile; DELETE FROM tag_inventory; DELETE FROM kv_published; DELETE FROM scans; DELETE FROM loyalty_stamps; DELETE FROM loyalty_redemptions; DELETE FROM loyalty_cards;',
+    'DELETE FROM business_profile; DELETE FROM tag_inventory; DELETE FROM kv_published; DELETE FROM scans; DELETE FROM loyalty_stamps; DELETE FROM loyalty_redemptions; DELETE FROM loyalty_cards; DELETE FROM tag_settings; DELETE FROM business_settings; DELETE FROM audit_log;',
   );
   for (const { name } of (await env.LINKS.list()).keys) await env.LINKS.delete(name);
 });
@@ -162,6 +162,117 @@ describe('PUT y DELETE', () => {
       (await call('PUT', '/tags/aaaaaaa', { ...tag({ targetUrl: 'http://x.ec' }), revision: 1 }))
         .status,
     ).toBe(400);
+  });
+});
+
+describe('ajustes del negocio (dueño: D1)', () => {
+  const setup = async () => {
+    await json('PUT', `/businesses/${BIZ}`, { ...business({ loyaltyVisits: 5 }), revision: 1 });
+    await json('PUT', '/tags/aaaaaaa', { ...tag(), revision: 2 });
+  };
+
+  it('se siembran con lo que envía la Pi y después la Pi no los pisa', async () => {
+    await setup();
+    const res = await json('PUT', '/tags/aaaaaaa/settings', {
+      targetUrl: 'https://menu.ec',
+      label: 'Mesa 1',
+    });
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({
+      slug: 'aaaaaaa',
+      businessId: BIZ,
+      targetUrl: 'https://menu.ec',
+    });
+
+    // Un envío posterior de la Pi con sus valores viejos (su copia) no cambia los ajustes.
+    await json('PUT', '/tags/aaaaaaa', { ...tag({ active: true }), revision: 3 });
+    await json('POST', '/sync', { revision: 4, businesses: [business()], tags: [tag()] });
+
+    expect(await kv('aaaaaaa')).toMatchObject({ url: 'https://menu.ec' });
+    expect(await kv(`report:${TOKEN_A}`)).toMatchObject({ tags: [{ label: 'Mesa 1' }] });
+    expect(await kv(`business:${BIZ}`)).toMatchObject({ loyaltyVisits: 5 });
+  });
+
+  it('reasignar el chip descarta los ajustes del negocio anterior', async () => {
+    await setup();
+    await json('PUT', `/businesses/${OTHER}`, {
+      ...business({ id: OTHER, reportToken: null }),
+      revision: 3,
+    });
+    await json('PUT', '/tags/aaaaaaa/settings', { targetUrl: 'https://menu.ec', paused: true });
+    await json('PUT', '/tags/aaaaaaa', {
+      ...tag({ businessId: OTHER, targetUrl: 'https://otro.ec' }),
+      revision: 4,
+    });
+    expect(await kv('aaaaaaa')).toEqual({
+      type: 'redirect',
+      url: 'https://otro.ec',
+      businessId: OTHER,
+      active: true,
+    });
+  });
+
+  it('pausar ("stand perdido") publica el chip inactivo y queda en la auditoría', async () => {
+    await setup();
+    const paused = await json<{ pausedAt: number }>('PUT', '/tags/aaaaaaa/settings', {
+      paused: true,
+    });
+    expect(paused.body.pausedAt).toBeGreaterThan(0);
+    expect(await kv('aaaaaaa')).toMatchObject({ active: false });
+
+    // Pausar otra vez no cambia nada (ni la fecha ni la auditoría).
+    const again = await json<{ pausedAt: number }>('PUT', '/tags/aaaaaaa/settings', {
+      paused: true,
+    });
+    expect(again.body.pausedAt).toBe(paused.body.pausedAt);
+
+    await json('PUT', '/tags/aaaaaaa/settings', { paused: false });
+    expect(await kv('aaaaaaa')).toMatchObject({ active: true });
+
+    const { results } = await env.DB.prepare(
+      'SELECT actor_type, actor_id, action, target, before_json, after_json FROM audit_log ORDER BY id',
+    ).all();
+    expect(results).toHaveLength(2);
+    expect(results[0]).toMatchObject({
+      actor_type: 'admin',
+      actor_id: null,
+      action: 'tag.settings',
+      target: 'aaaaaaa',
+      before_json: JSON.stringify({ pausedAt: null }),
+    });
+  });
+
+  it('visitas del premio: se publican y null desactiva el programa', async () => {
+    await setup();
+    await json('PUT', `/businesses/${BIZ}/settings`, { loyaltyVisits: 8 });
+    expect(await kv(`business:${BIZ}`)).toMatchObject({ loyaltyVisits: 8 });
+    await json('PUT', `/businesses/${BIZ}/settings`, { loyaltyVisits: null });
+    expect(await kv(`business:${BIZ}`)).toMatchObject({ loyaltyVisits: null });
+  });
+
+  it('errores: chip inexistente, chip sin negocio y valores inválidos', async () => {
+    await setup();
+    await json('PUT', '/tags/libre01', {
+      ...tag({ slug: 'libre01', number: 2, businessId: null }),
+      revision: 3,
+    });
+    expect((await call('PUT', '/tags/zzzzzzz/settings', { label: 'x' })).status).toBe(404);
+    expect((await call('PUT', '/tags/libre01/settings', { label: 'x' })).status).toBe(409);
+    expect(
+      (await call('PUT', '/tags/aaaaaaa/settings', { targetUrl: 'javascript:alert(1)' })).status,
+    ).toBe(400);
+    expect((await call('PUT', `/businesses/${BIZ}/settings`, { loyaltyVisits: 99 })).status).toBe(
+      400,
+    );
+  });
+
+  it('GET /settings devuelve lo cambiado desde una fecha', async () => {
+    await setup();
+    const all = await json<{ tags: unknown[]; businesses: unknown[] }>('GET', '/settings');
+    expect(all.body.tags).toHaveLength(1);
+    expect(all.body.businesses).toHaveLength(1);
+    const later = await json<{ tags: unknown[] }>('GET', `/settings?since=${Date.now() + 60_000}`);
+    expect(later.body.tags).toHaveLength(0);
   });
 });
 

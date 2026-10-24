@@ -4,7 +4,9 @@ import type { z } from 'zod';
 import type { SyncResult } from '../contracts.js';
 import type { Db } from '../db/client.js';
 import { businesses, tags, type Business } from '../db/schema.js';
+import { EdgeError, type EdgeClient } from '../edge-client.js';
 import { businessEntity, type Publisher, type Writer } from '../publisher.js';
+import { applyBusinessSettings } from '../settings-sync.js';
 import type { BusinessCreate, BusinessUpdate } from '../validation.js';
 import type { TagWithStatus } from './tag-service.js';
 
@@ -12,7 +14,9 @@ export type BusinessCreateInput = z.output<typeof BusinessCreate>;
 export type BusinessUpdateInput = z.output<typeof BusinessUpdate>;
 
 export type BusinessResult =
-  { ok: true; business: Business; sync: SyncResult } | { ok: false; error: 'not_found' };
+  | { ok: true; business: Business; sync: SyncResult }
+  | { ok: false; error: 'not_found' }
+  | { ok: false; error: 'edge_unavailable'; detail: string };
 
 export type DeleteBusinessResult =
   { ok: true; sync: SyncResult } | { ok: false; error: 'not_found' | 'has_tags' };
@@ -20,7 +24,15 @@ export type DeleteBusinessResult =
 export type BusinessService = ReturnType<typeof createBusinessService>;
 
 /** Negocios: datos comerciales, enlace de estadísticas y su publicación. */
-export function createBusinessService({ db, publisher }: { db: Db; publisher: Publisher }) {
+export function createBusinessService({
+  db,
+  publisher,
+  edge,
+}: {
+  db: Db;
+  publisher: Publisher;
+  edge: EdgeClient;
+}) {
   const find = (id: string): Business | null =>
     db.select().from(businesses).where(eq(businesses.id, id)).get() ?? null;
 
@@ -74,7 +86,23 @@ export function createBusinessService({ db, publisher }: { db: Db; publisher: Pu
       return { business: result.business, sync: result.sync };
     },
 
-    update(id: string, patch: BusinessUpdateInput): Promise<BusinessResult> {
+    async update(id: string, patch: BusinessUpdateInput): Promise<BusinessResult> {
+      if (!find(id)) return { ok: false, error: 'not_found' };
+      if (patch.loyaltyVisits !== undefined) {
+        // Las visitas del premio son un ajuste del negocio (dueño: D1): primero el Worker.
+        // 404 = el Worker aún no tiene el negocio (alta en la cola): viaja como semilla.
+        try {
+          const settings = await edge.putBusinessSettings(id, {
+            loyaltyVisits: patch.loyaltyVisits,
+          });
+          applyBusinessSettings(db, settings);
+        } catch (err) {
+          if (!(err instanceof EdgeError && err.status === 404)) {
+            const detail = err instanceof Error ? err.message : String(err);
+            return { ok: false, error: 'edge_unavailable', detail };
+          }
+        }
+      }
       // El estado y el nombre afectan a sus chips y a su enlace: el Worker los recalcula.
       return saveAndPublish(id, (tx) =>
         Object.keys(patch).length > 0

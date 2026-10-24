@@ -13,7 +13,7 @@ import type {
   UpdateTagResult,
 } from '../services/tag-service.js';
 import { QrQuery, TagCreate, TagListQuery, TagUpdate, validate } from '../validation.js';
-import { errorResponder } from './errors.js';
+import { EDGE_UNAVAILABLE, errorResponder } from './errors.js';
 
 type TagError = Extract<
   CreateTagResult | UpdateTagResult | LockTagResult | DeleteTagResult | QrTargetResult,
@@ -23,6 +23,7 @@ type TagError = Extract<
 const fail = errorResponder<TagError>({
   not_found: { status: 404 },
   business_not_found: { status: 422 },
+  edge_unavailable: EDGE_UNAVAILABLE,
   slug_generation_failed: { status: 500 },
   already_locked: { status: 409 },
   locked: {
@@ -68,7 +69,9 @@ export function tagRoutes({ tags, edge, publicBaseUrl }: RouteDeps) {
 
   app.patch('/:slug', validate('json', TagUpdate), async (c) => {
     const result = await tags.update(c.req.param('slug'), c.req.valid('json'));
-    if (!result.ok) return fail(c, result.error);
+    if (!result.ok) {
+      return fail(c, result.error, 'detail' in result ? { detail: result.detail } : {});
+    }
     return c.json({ ...dto(result), sync: result.sync });
   });
 

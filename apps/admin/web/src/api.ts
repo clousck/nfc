@@ -26,7 +26,9 @@ export type BusinessInput = Partial<
   Pick<Business, 'name' | 'contactName' | 'phone' | 'plan' | 'status' | 'notes' | 'loyaltyVisits'>
 >;
 
-export type TagInput = Partial<Pick<Tag, 'businessId' | 'label' | 'targetUrl' | 'active' | 'type'>>;
+export type TagInput = Partial<
+  Pick<Tag, 'businessId' | 'label' | 'targetUrl' | 'active' | 'type'> & { paused: boolean }
+>;
 
 export class ApiError extends Error {
   constructor(

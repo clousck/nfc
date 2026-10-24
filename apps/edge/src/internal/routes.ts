@@ -4,8 +4,11 @@ import {
   DeleteQuery,
   IncidentsQuery,
   PutBusinessBody,
+  PutBusinessSettingsBody,
   PutTagBody,
+  PutTagSettingsBody,
   ScanStatsQuery,
+  SettingsChangesQuery,
   Slug,
   SyncBody,
 } from '@nfc/shared';
@@ -14,7 +17,17 @@ import { z } from 'zod';
 import type { Env } from '../env.js';
 import { incidentSummary } from '../rate-limit.js';
 import { internalAuth } from './auth.js';
-import { deleteBusiness, deleteTag, putBusiness, putTag, syncAll } from './control-plane.js';
+import {
+  deleteBusiness,
+  deleteTag,
+  putBusiness,
+  putBusinessSettings,
+  putTag,
+  putTagSettings,
+  settingsChanges,
+  syncAll,
+  type SettingsError,
+} from './control-plane.js';
 import { deleteCardOfBusiness, loyaltyCards, loyaltyContacts, tagScanStats } from './queries.js';
 
 /** Errores de validación en JSON (esta API solo la consume la Pi). */
@@ -30,6 +43,11 @@ function json<Target extends 'json' | 'query', Schema extends z.ZodType>(
 }
 
 const slugParam = zValidator('param', z.object({ slug: Slug }));
+
+const SETTINGS_STATUS = { not_found: 404, not_assigned: 409 } as const satisfies Record<
+  SettingsError,
+  number
+>;
 const businessParam = zValidator('param', z.object({ id: BusinessId }));
 
 export const internalRoutes = new Hono<{ Bindings: Env }>();
@@ -56,6 +74,38 @@ internalRoutes.put('/businesses/:id', businessParam, json('json', PutBusinessBod
 internalRoutes.delete('/businesses/:id', businessParam, json('query', DeleteQuery), async (c) => {
   const { id } = c.req.valid('param');
   return c.json(await deleteBusiness(c.env, id, c.req.valid('query').revision));
+});
+
+// Ajustes del negocio cambiados por el admin desde el panel (quedan en la auditoría).
+internalRoutes.put(
+  '/tags/:slug/settings',
+  slugParam,
+  json('json', PutTagSettingsBody),
+  async (c) => {
+    const result = await putTagSettings(c.env, c.req.valid('param').slug, c.req.valid('json'), {
+      type: 'admin',
+    });
+    if (!result.ok) return c.json({ error: result.error }, SETTINGS_STATUS[result.error]);
+    return c.json(result.settings);
+  },
+);
+
+internalRoutes.put(
+  '/businesses/:id/settings',
+  businessParam,
+  json('json', PutBusinessSettingsBody),
+  async (c) => {
+    const result = await putBusinessSettings(c.env, c.req.valid('param').id, c.req.valid('json'), {
+      type: 'admin',
+    });
+    if (!result.ok) return c.json({ error: result.error }, SETTINGS_STATUS[result.error]);
+    return c.json(result.settings);
+  },
+);
+
+/** Para que la Pi refresque su copia de los ajustes (lo que cambian los dueños). */
+internalRoutes.get('/settings', json('query', SettingsChangesQuery), async (c) => {
+  return c.json(await settingsChanges(c.env.DB, c.req.valid('query').since));
 });
 
 internalRoutes.post('/sync', json('json', SyncBody), async (c) => {

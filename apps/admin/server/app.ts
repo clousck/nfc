@@ -32,7 +32,7 @@ export function createApp(options: CreateAppOptions) {
 
   const publisher = deps.publisher ?? createPublisher({ db: deps.db, edge: deps.edge });
   const routeDeps: RouteDeps = {
-    ...createServices({ db: deps.db, publisher }),
+    ...createServices({ db: deps.db, publisher, edge: deps.edge }),
     edge: deps.edge,
     publisher,
     publicBaseUrl: deps.publicBaseUrl,

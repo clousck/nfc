@@ -32,6 +32,7 @@ export function toTagDto(tag: Tag, published: boolean, publicBaseUrl: string): T
     targetUrl: tag.targetUrl,
     active: tag.active,
     lockedAt: tag.lockedAt,
+    pausedAt: tag.pausedAt,
     syncedAt: tag.syncedAt,
     createdAt: tag.createdAt,
     urls: buildTagUrls(publicBaseUrl, tag.slug),
