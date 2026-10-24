@@ -7,6 +7,7 @@ import {
   sourceFromParam,
   SOURCE_PARAM,
 } from '@nfc/shared';
+import { cleanupLoginTokens } from './accounts/store.js';
 import { cleanupAudit } from './audit.js';
 import type { Env } from './env.js';
 import { fallbackResponse as fallback } from './fallback.js';
@@ -132,6 +133,12 @@ export default {
   /** Cron diario (wrangler.toml): incidentes viejos, sales de días pasados y auditoría de >1 año. */
   async scheduled(_controller, env, ctx) {
     const now = Date.now();
-    ctx.waitUntil(Promise.all([cleanupRateLimits(env.DB, now), cleanupAudit(env.DB, now)]));
+    ctx.waitUntil(
+      Promise.all([
+        cleanupRateLimits(env.DB, now),
+        cleanupAudit(env.DB, now),
+        cleanupLoginTokens(env.DB, now),
+      ]),
+    );
   },
 } satisfies ExportedHandler<Env>;

@@ -1,8 +1,11 @@
 // Los tipos salen del contrato de la API, nunca del esquema de la base de datos.
 import type {
+  AccountDto,
+  AccountsDto,
   BusinessDetailDto,
   BusinessDto,
   LoyaltyCardDto,
+  LoginLinkDto,
   LoyaltyDto,
   PublishStatusDto,
   RateLimitIncidentsDto,
@@ -21,6 +24,8 @@ export type Tag = TagDto;
 /** Chip tal como lo devuelve la API; tras crear o editar incluye el resultado de publicar. */
 export type TagView = TagDto & { sync?: SyncResult };
 export type LoyaltyCard = LoyaltyCardDto;
+export type Account = AccountDto;
+export type LoginLink = LoginLinkDto;
 
 export type BusinessInput = Partial<
   Pick<Business, 'name' | 'contactName' | 'phone' | 'plan' | 'status' | 'notes' | 'loyaltyVisits'>
@@ -105,6 +110,13 @@ export const api = {
   getLoyalty: (id: string) => request<LoyaltyDto>('GET', `/api/businesses/${id}/loyalty`),
   deleteLoyaltyCard: (id: string, cardId: number) =>
     request<{ deleted: number }>('DELETE', `/api/businesses/${id}/loyalty/cards/${cardId}`),
+  listAccounts: (id: string) => request<AccountsDto>('GET', `/api/businesses/${id}/accounts`),
+  addAccount: (id: string, input: { email: string; name: string | null }) =>
+    request<Account>('POST', `/api/businesses/${id}/accounts`, input),
+  removeAccount: (id: string, accountId: string) =>
+    request<{ removed: true }>('DELETE', `/api/businesses/${id}/accounts/${accountId}`),
+  loginLink: (id: string, accountId: string) =>
+    request<LoginLink>('POST', `/api/businesses/${id}/accounts/${accountId}/login-link`),
   regenerateReport: (id: string) =>
     request<WithSync<Business>>('POST', `/api/businesses/${id}/report-token`),
 

@@ -186,6 +186,12 @@ main.container {
   border-color: transparent;
 }
 
+.card-info {
+  background: var(--info-bg);
+  border-color: transparent;
+  margin: 0.75rem 0;
+}
+
 .empty {
   text-align: center;
 }

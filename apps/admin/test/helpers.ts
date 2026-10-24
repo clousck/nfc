@@ -1,9 +1,11 @@
 import { fileURLToPath } from 'node:url';
 import {
   projectAll,
+  type AccountSummary,
   type ApplyResponse,
   type BusinessSettings,
   type BusinessState,
+  type CreateAccountBody,
   type KvValue,
   type LinkRecord,
   type LoyaltyCardsResponse,
@@ -45,6 +47,8 @@ export class FakeEdge implements EdgeClient {
   cards = new Map<string, Card[]>();
   contacts = new Map<string, LoyaltyContactsResponse['contacts']>();
   incidentList: RateLimitIncidentsResponse['incidents'] = [];
+  /** businessId → cuentas con acceso. */
+  accountsByBusiness = new Map<string, AccountSummary[]>();
   tagSettings = new Map<string, TagSettings>();
   businessSettings = new Map<string, BusinessSettings>();
   private clock = 1;
@@ -203,6 +207,47 @@ export class FakeEdge implements EdgeClient {
     return {
       tags: [...this.tagSettings.values()].filter((s) => s.updatedAt >= since),
       businesses: [...this.businessSettings.values()].filter((s) => s.updatedAt >= since),
+    };
+  }
+
+  async accounts(businessId: string) {
+    this.check(`GET accounts:${businessId}`);
+    return { accounts: this.accountsByBusiness.get(businessId) ?? [] };
+  }
+
+  async addAccount(businessId: string, body: CreateAccountBody) {
+    this.check(`POST account:${businessId}`);
+    if (!this.businesses.has(businessId)) throw new EdgeError('Worker → 404', 404);
+    const list = this.accountsByBusiness.get(businessId) ?? [];
+    if (list.some((a) => a.email === body.email)) throw new EdgeError('Worker → 409', 409);
+    const account: AccountSummary = {
+      id: `a_${String(this.clock++).padStart(12, '0')}`,
+      email: body.email,
+      name: body.name ?? null,
+      createdAt: Date.now(),
+      lastLoginAt: null,
+    };
+    this.accountsByBusiness.set(businessId, [...list, account]);
+    return account;
+  }
+
+  async removeAccount(businessId: string, accountId: string) {
+    this.check(`DELETE account:${businessId}:${accountId}`);
+    const list = this.accountsByBusiness.get(businessId) ?? [];
+    if (!list.some((a) => a.id === accountId)) throw new EdgeError('Worker → 404', 404);
+    this.accountsByBusiness.set(
+      businessId,
+      list.filter((a) => a.id !== accountId),
+    );
+  }
+
+  async loginLink(businessId: string, accountId: string) {
+    this.check(`POST login-link:${businessId}:${accountId}`);
+    const list = this.accountsByBusiness.get(businessId) ?? [];
+    if (!list.some((a) => a.id === accountId)) throw new EdgeError('Worker → 404', 404);
+    return {
+      url: `https://negocios.penginexr.com/entrar/${'t'.repeat(43)}`,
+      expiresAt: Date.now() + 86_400_000,
     };
   }
 

@@ -1,6 +1,8 @@
 import { zValidator } from '@hono/zod-validator';
 import {
+  AccountId,
   BusinessId,
+  CreateAccountBody,
   DeleteQuery,
   IncidentsQuery,
   PutBusinessBody,
@@ -14,6 +16,7 @@ import {
 } from '@nfc/shared';
 import { Hono } from 'hono';
 import { z } from 'zod';
+import { addAccount, createLoginLink, listAccounts, removeAccount } from '../accounts/store.js';
 import type { Env } from '../env.js';
 import { incidentSummary } from '../rate-limit.js';
 import { internalAuth } from './auth.js';
@@ -133,6 +136,40 @@ internalRoutes.delete(
     return c.json({ deleted: await deleteCardOfBusiness(c.env.DB, id, cardId) });
   },
 );
+
+// Cuentas de los dueños: las crea el admin; el enlace de acceso se copia desde el panel.
+const accountParam = zValidator('param', z.object({ id: BusinessId, accountId: AccountId }));
+
+internalRoutes.get('/businesses/:id/accounts', businessParam, async (c) => {
+  return c.json({ accounts: await listAccounts(c.env.DB, c.req.valid('param').id) });
+});
+
+internalRoutes.post(
+  '/businesses/:id/accounts',
+  businessParam,
+  json('json', CreateAccountBody),
+  async (c) => {
+    const result = await addAccount(c.env, c.req.valid('param').id, c.req.valid('json'), {
+      type: 'admin',
+    });
+    if (!result.ok) {
+      return c.json({ error: result.error }, result.error === 'already_member' ? 409 : 404);
+    }
+    return c.json(result.account, 201);
+  },
+);
+
+internalRoutes.delete('/businesses/:id/accounts/:accountId', accountParam, async (c) => {
+  const { id, accountId } = c.req.valid('param');
+  const removed = await removeAccount(c.env, id, accountId, { type: 'admin' });
+  return removed ? c.json({ removed: true }) : c.json({ error: 'not_found' }, 404);
+});
+
+internalRoutes.post('/businesses/:id/accounts/:accountId/login-link', accountParam, async (c) => {
+  const { id, accountId } = c.req.valid('param');
+  const link = await createLoginLink(c.env, id, accountId, 'invite');
+  return link ? c.json(link) : c.json({ error: 'not_found' }, 404);
+});
 
 /** Incidentes de límite de peticiones (de un negocio o de todos). */
 internalRoutes.get('/incidents', json('query', IncidentsQuery), async (c) => {

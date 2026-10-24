@@ -6,3 +6,4 @@ export * from './report.js';
 export * from './loyalty.js';
 export * from './projection.js';
 export * from './internal-api.js';
+export * from './accounts.js';

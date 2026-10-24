@@ -11,6 +11,8 @@ REPORT_TZ_OFFSET_MINUTES = "-300"
 # observe = registra lo que se habría bloqueado, pero deja pasar. enforce = bloquea (429).
 # Pasar a enforce tras revisar 2–4 semanas de incidentes (docs/SECURITY.md §4).
 RATE_LIMIT_MODE = "observe"
+# Portal de los negocios (mismo Worker, otro hostname). Se usa para los enlaces de acceso.
+PORTAL_ORIGIN = "https://negocios.penginexr.com"
 
 # Limpieza diaria (03:00 de Ecuador): incidentes de más de 90 días y sales de días pasados.
 [triggers]

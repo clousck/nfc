@@ -6,6 +6,7 @@ import { logger } from 'hono/logger';
 import type { ResyncDto } from './contracts.js';
 import type { AppDeps, AppEnv, RouteDeps } from './context.js';
 import { createPublisher } from './publisher.js';
+import { accountRoutes } from './routes/accounts.js';
 import { businessRoutes } from './routes/businesses.js';
 import { incidentRoutes } from './routes/incidents.js';
 import { loyaltyRoutes } from './routes/loyalty.js';
@@ -39,6 +40,7 @@ export function createApp(options: CreateAppOptions) {
   };
   app.route('/api/businesses', businessRoutes(routeDeps));
   app.route('/api/businesses', loyaltyRoutes(routeDeps));
+  app.route('/api/businesses', accountRoutes(routeDeps));
   app.route('/api/tags', tagRoutes(routeDeps));
   app.route('/api', incidentRoutes(routeDeps));
 

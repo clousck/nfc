@@ -7,6 +7,8 @@ export interface Env {
   REPORT_TZ_OFFSET_MINUTES?: string;
   /** Secreto compartido con la Pi para /internal/* (wrangler secret). Sin él, /internal queda cerrado. */
   INTERNAL_API_TOKEN?: string;
+  /** Origen del portal de negocios (enlaces de acceso). Por defecto https://negocios.penginexr.com. */
+  PORTAL_ORIGIN?: string;
   /** observe | enforce (ver wrangler.toml). */
   RATE_LIMIT_MODE?: string;
   RL_DEVICE: RateLimit;

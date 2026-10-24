@@ -38,3 +38,34 @@ CREATE TABLE IF NOT EXISTS audit_log (
 );
 CREATE INDEX IF NOT EXISTS idx_audit_log_business_ts ON audit_log(business_id, ts);
 CREATE INDEX IF NOT EXISTS idx_audit_log_ts ON audit_log(ts);
+
+-- Identidad (docs/BUSINESS-ACCOUNTS.md §4). Las cuentas las crea el admin desde el panel; no
+-- hay registro público. Una cuenta puede ser dueña de varios negocios (memberships).
+CREATE TABLE IF NOT EXISTS accounts (
+  id TEXT PRIMARY KEY,                  -- a_<base62>
+  email TEXT NOT NULL UNIQUE,           -- en minúsculas
+  name TEXT,
+  created_at INTEGER NOT NULL,
+  last_login_at INTEGER,
+  disabled_at INTEGER
+);
+
+CREATE TABLE IF NOT EXISTS memberships (
+  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  business_id TEXT NOT NULL,
+  role TEXT NOT NULL DEFAULT 'owner',
+  created_at INTEGER NOT NULL,
+  PRIMARY KEY (account_id, business_id)
+);
+CREATE INDEX IF NOT EXISTS idx_memberships_business ON memberships(business_id);
+
+-- Enlaces de acceso de un solo uso. Solo se guarda el hash del token.
+CREATE TABLE IF NOT EXISTS login_tokens (
+  token_hash TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  purpose TEXT NOT NULL,                -- email (15 min) | invite (24 h, copiado desde el panel)
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_login_tokens_expires ON login_tokens(expires_at);

@@ -139,3 +139,23 @@ export interface LoyaltyDto {
   visits: number | null;
   cards: LoyaltyCardDto[];
 }
+
+/** Cuenta de un dueño con acceso al portal del negocio (vive en D1). */
+export interface AccountDto {
+  id: string;
+  email: string;
+  name: string | null;
+  createdAt: number;
+  /** Último acceso al portal; null = nunca entró. */
+  lastLoginAt: number | null;
+}
+
+export interface AccountsDto {
+  accounts: AccountDto[];
+}
+
+/** Enlace de acceso de un solo uso para enviar al dueño (caduca en 24 h). */
+export interface LoginLinkDto {
+  url: string;
+  expiresAt: number;
+}

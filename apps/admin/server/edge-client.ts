@@ -1,8 +1,11 @@
 import {
+  AccountsResponse,
+  AccountSummary,
   ApplyResponse,
   BusinessSettings,
   DeleteCardResponse,
   INTERNAL_PREFIX,
+  LoginLinkResponse,
   LoyaltyCardsResponse,
   LoyaltyContactsResponse,
   RateLimitIncidentsResponse,
@@ -11,12 +14,15 @@ import {
   TagScanStatsResponse,
   TagSettings,
   type BusinessState,
+  type CreateAccountBody,
   type PutBusinessSettingsBody,
   type PutTagSettingsBody,
   type SyncBody,
   type TagState,
 } from '@nfc/shared';
-import type { z } from 'zod';
+import { z } from 'zod';
+
+const RemovedResponse = z.object({ removed: z.literal(true) });
 
 /**
  * Lo que la Pi necesita del plano de datos. El Worker es el único dueño de D1 y el único
@@ -37,6 +43,12 @@ export interface EdgeClient {
   loyaltyCards(businessId: string): Promise<LoyaltyCardsResponse>;
   loyaltyContacts(businessId: string): Promise<LoyaltyContactsResponse>;
   deleteLoyaltyCard(businessId: string, cardId: number): Promise<boolean>;
+  /** Cuentas de los dueños (404 = el Worker aún no tiene el negocio; 409 = ya tiene acceso). */
+  accounts(businessId: string): Promise<AccountsResponse>;
+  addAccount(businessId: string, body: CreateAccountBody): Promise<AccountSummary>;
+  removeAccount(businessId: string, accountId: string): Promise<void>;
+  /** Enlace de acceso de un solo uso (24 h) para enviarlo por WhatsApp. */
+  loginLink(businessId: string, accountId: string): Promise<LoginLinkResponse>;
   /** Incidentes de límite de peticiones; businessId null = todos. */
   incidents(businessId: string | null, days: number): Promise<RateLimitIncidentsResponse>;
 }
@@ -132,6 +144,17 @@ export function createHttpEdgeClient(options: HttpEdgeOptions): EdgeClient {
         'GET',
         `/incidents?days=${days}${businessId ? `&businessId=${enc(businessId)}` : ''}`,
       ),
+    accounts: (id) => call(AccountsResponse, 'GET', `/businesses/${enc(id)}/accounts`),
+    addAccount: (id, body) => call(AccountSummary, 'POST', `/businesses/${enc(id)}/accounts`, body),
+    removeAccount: async (id, accountId) => {
+      await call(RemovedResponse, 'DELETE', `/businesses/${enc(id)}/accounts/${enc(accountId)}`);
+    },
+    loginLink: (id, accountId) =>
+      call(
+        LoginLinkResponse,
+        'POST',
+        `/businesses/${enc(id)}/accounts/${enc(accountId)}/login-link`,
+      ),
     deleteLoyaltyCard: async (id, cardId) =>
       (await call(DeleteCardResponse, 'DELETE', `/businesses/${enc(id)}/loyalty/cards/${cardId}`))
         .deleted,
@@ -156,6 +179,10 @@ export function createUnconfiguredEdgeClient(): EdgeClient {
     loyaltyCards: fail,
     loyaltyContacts: fail,
     deleteLoyaltyCard: fail,
+    accounts: fail,
+    addAccount: fail,
+    removeAccount: fail,
+    loginLink: fail,
     incidents: fail,
   };
 }
