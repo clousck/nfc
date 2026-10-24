@@ -4,9 +4,9 @@ import { beforeEach, describe, expect, it } from 'vitest';
 import worker from '../src/index.js';
 import { cleanupRateLimits } from '../src/rate-limit.js';
 import type { Env } from '../src/env.js';
+import { seedStaffDevice } from './staff-helpers.js';
 
 const BIZ = 'b_cafe00000001';
-const STAFF_TOKEN = 'S'.repeat(24);
 const TOKEN = 'test-internal-token-0123456789abcdef';
 
 let ipCounter = 0;
@@ -39,10 +39,8 @@ async function hammer(times: number, path: string, init: Parameters<typeof call>
 }
 
 beforeEach(async () => {
-  await env.DB.exec('DELETE FROM rate_limit_incidents; DELETE FROM daily_salts;');
-  await env.LINKS.put(
-    `report:${STAFF_TOKEN}`,
-    JSON.stringify({ businessId: BIZ, name: 'Café X', tags: [] }),
+  await env.DB.exec(
+    'DELETE FROM rate_limit_incidents; DELETE FROM daily_salts; DELETE FROM staff_devices;',
   );
 });
 
@@ -71,7 +69,7 @@ describe('límite de peticiones', () => {
   });
 
   it('el personal tiene 3 veces el límite público', async () => {
-    const cookie = `nfc_staff=${STAFF_TOKEN}`;
+    const cookie = await seedStaffDevice(BIZ);
     const statuses = await hammer(91, '/v/ABCD2345', { ip: freshIp(), cookie, mode: 'enforce' });
     expect(statuses.slice(0, 90).every((s) => s !== 429)).toBe(true);
     expect(statuses[90]).toBe(429);

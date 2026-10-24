@@ -10,6 +10,7 @@ import { accountRoutes } from './routes/accounts.js';
 import { businessRoutes } from './routes/businesses.js';
 import { incidentRoutes } from './routes/incidents.js';
 import { loyaltyRoutes } from './routes/loyalty.js';
+import { appSettingsRoutes, staffRoutes } from './routes/staff.js';
 import { tagRoutes } from './routes/tags.js';
 import { createServices } from './services/index.js';
 
@@ -41,6 +42,8 @@ export function createApp(options: CreateAppOptions) {
   app.route('/api/businesses', businessRoutes(routeDeps));
   app.route('/api/businesses', loyaltyRoutes(routeDeps));
   app.route('/api/businesses', accountRoutes(routeDeps));
+  app.route('/api/businesses', staffRoutes(routeDeps));
+  app.route('/api/app-settings', appSettingsRoutes(routeDeps));
   app.route('/api/tags', tagRoutes(routeDeps));
   app.route('/api', incidentRoutes(routeDeps));
 

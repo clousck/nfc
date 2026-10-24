@@ -2,17 +2,21 @@ import {
   AccountsResponse,
   AccountSummary,
   ApplyResponse,
+  AppSettingsResponse,
   BusinessSettings,
   DeleteCardResponse,
   INTERNAL_PREFIX,
   LoginLinkResponse,
   LoyaltyCardsResponse,
   LoyaltyContactsResponse,
+  PairingResponse,
   RateLimitIncidentsResponse,
   SettingsChangesResponse,
+  StaffDevicesResponse,
   SyncResponse,
   TagScanStatsResponse,
   TagSettings,
+  type AppSettingsBody,
   type BusinessState,
   type CreateAccountBody,
   type PutBusinessSettingsBody,
@@ -23,6 +27,7 @@ import {
 import { z } from 'zod';
 
 const RemovedResponse = z.object({ removed: z.literal(true) });
+const RevokedResponse = z.object({ revoked: z.literal(true) });
 
 /**
  * Lo que la Pi necesita del plano de datos. El Worker es el único dueño de D1 y el único
@@ -49,6 +54,13 @@ export interface EdgeClient {
   removeAccount(businessId: string, accountId: string): Promise<void>;
   /** Enlace de acceso de un solo uso (24 h) para enviarlo por WhatsApp. */
   loginLink(businessId: string, accountId: string): Promise<LoginLinkResponse>;
+  /** Móviles del personal que validan canjes. */
+  staffDevices(businessId: string): Promise<StaffDevicesResponse>;
+  createPairing(businessId: string, label: string): Promise<PairingResponse>;
+  revokeStaffDevice(businessId: string, deviceId: string): Promise<void>;
+  /** Ajustes globales (a quién avisar de un stand perdido). */
+  appSettings(): Promise<AppSettingsResponse>;
+  setAppSettings(body: AppSettingsBody): Promise<AppSettingsResponse>;
   /** Incidentes de límite de peticiones; businessId null = todos. */
   incidents(businessId: string | null, days: number): Promise<RateLimitIncidentsResponse>;
 }
@@ -155,6 +167,14 @@ export function createHttpEdgeClient(options: HttpEdgeOptions): EdgeClient {
         'POST',
         `/businesses/${enc(id)}/accounts/${enc(accountId)}/login-link`,
       ),
+    staffDevices: (id) => call(StaffDevicesResponse, 'GET', `/businesses/${enc(id)}/staff`),
+    createPairing: (id, label) =>
+      call(PairingResponse, 'POST', `/businesses/${enc(id)}/staff/pairing`, { label }),
+    revokeStaffDevice: async (id, deviceId) => {
+      await call(RevokedResponse, 'DELETE', `/businesses/${enc(id)}/staff/${enc(deviceId)}`);
+    },
+    appSettings: () => call(AppSettingsResponse, 'GET', '/app-settings'),
+    setAppSettings: (body) => call(AppSettingsResponse, 'PUT', '/app-settings', body),
     deleteLoyaltyCard: async (id, cardId) =>
       (await call(DeleteCardResponse, 'DELETE', `/businesses/${enc(id)}/loyalty/cards/${cardId}`))
         .deleted,
@@ -183,6 +203,11 @@ export function createUnconfiguredEdgeClient(): EdgeClient {
     addAccount: fail,
     removeAccount: fail,
     loginLink: fail,
+    staffDevices: fail,
+    createPairing: fail,
+    revokeStaffDevice: fail,
+    appSettings: fail,
+    setAppSettings: fail,
     incidents: fail,
   };
 }

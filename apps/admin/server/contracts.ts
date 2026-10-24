@@ -159,3 +159,28 @@ export interface LoginLinkDto {
   url: string;
   expiresAt: number;
 }
+
+/** Móvil del personal que valida canjes (vive en D1). */
+export interface StaffDeviceDto {
+  id: string;
+  label: string;
+  createdAt: number;
+  /** Correo del dueño que lo vinculó; null = el admin. */
+  createdBy: string | null;
+  lastUsedAt: number | null;
+}
+
+export interface StaffDevicesDto {
+  devices: StaffDeviceDto[];
+}
+
+/** Enlace de vinculación de un solo uso (caduca en 15 min). */
+export interface PairingDto {
+  url: string;
+  expiresAt: number;
+}
+
+export interface AppSettingsDto {
+  /** A quién se avisa de un stand perdido. */
+  adminNotifyEmail: string;
+}

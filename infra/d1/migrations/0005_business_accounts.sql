@@ -81,3 +81,38 @@ CREATE TABLE IF NOT EXISTS sessions (
 );
 CREATE INDEX IF NOT EXISTS idx_sessions_account ON sessions(account_id);
 CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);
+
+-- Personal: sin cuenta, un móvil vinculado por negocio (docs/BUSINESS-ACCOUNTS.md §4).
+CREATE TABLE IF NOT EXISTS staff_devices (
+  id TEXT PRIMARY KEY,                  -- d_<base62>
+  business_id TEXT NOT NULL,
+  label TEXT NOT NULL,                  -- "Caja – María"
+  token_hash TEXT NOT NULL UNIQUE,      -- hash de la cookie __Host-nfc_staff
+  created_by TEXT,                      -- cuenta del dueño; NULL = admin
+  created_at INTEGER NOT NULL,
+  last_used_at INTEGER,
+  revoked_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_staff_devices_business ON staff_devices(business_id);
+
+-- QR / enlace de vinculación: un solo uso, 15 minutos.
+CREATE TABLE IF NOT EXISTS pairing_tokens (
+  token_hash TEXT PRIMARY KEY,
+  business_id TEXT NOT NULL,
+  label TEXT NOT NULL,
+  created_by TEXT,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  used_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_pairing_tokens_expires ON pairing_tokens(expires_at);
+
+-- Qué dispositivo validó cada canje.
+ALTER TABLE loyalty_redemptions ADD COLUMN validated_by_device TEXT;
+
+-- Ajustes globales que el admin cambia desde el panel (p. ej. a quién avisar).
+CREATE TABLE IF NOT EXISTS app_settings (
+  key TEXT PRIMARY KEY,
+  value TEXT NOT NULL,
+  updated_at INTEGER NOT NULL
+);

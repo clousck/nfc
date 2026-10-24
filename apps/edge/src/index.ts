@@ -13,11 +13,10 @@ import type { Env } from './env.js';
 import { fallbackResponse as fallback } from './fallback.js';
 import { internalRoutes } from './internal/routes.js';
 import { handleLoyaltyTap, loyaltyRoutes } from './loyalty/routes.js';
-import { colorOfDay } from './loyalty/pages.js';
-import { readCookie, STAFF_COOKIE } from './loyalty/security.js';
-import { localDay, loyaltySummary } from './loyalty/store.js';
+import { loyaltySummary } from './loyalty/store.js';
 import { portalRoutes } from './portal/routes.js';
 import { cleanupSessions } from './portal/session.js';
+import { cleanupPairingTokens } from './staff/store.js';
 import { cleanupRateLimits } from './rate-limit.js';
 import { loadReport, queryReportStats } from './report.js';
 import { renderReportPage, type ReportLoyalty } from './report-page.js';
@@ -47,7 +46,6 @@ app.get('/r/:token', async (c) => {
   if (!report) return fallback();
   const now = Date.now();
   const offset = Number(c.env.REPORT_TZ_OFFSET_MINUTES ?? '-300');
-  const token = c.req.param('token');
   const [stats, businessRaw] = await Promise.all([
     queryReportStats(c.env.DB, report, now, offset),
     c.env.LINKS.get(businessKey(report.businessId), 'json'),
@@ -58,9 +56,6 @@ app.get('/r/:token', async (c) => {
     loyalty = {
       visits: business.data.loyaltyVisits,
       summary: await loyaltySummary(c.env.DB, report.businessId, now),
-      isValidator: readCookie(c.req.raw, STAFF_COOKIE) === token,
-      color: colorOfDay(localDay(now, offset)),
-      token,
     };
   }
   return new Response(renderReportPage(report, stats, now, loyalty), {
@@ -150,6 +145,7 @@ export default {
         cleanupAudit(env.DB, now),
         cleanupLoginTokens(env.DB, now),
         cleanupSessions(env.DB, now),
+        cleanupPairingTokens(env.DB, now),
       ]),
     );
   },

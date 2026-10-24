@@ -20,8 +20,10 @@ export interface Env {
   RESEND_API_KEY?: string;
   /** Remitente de los correos, p. ej. "PengineXR <acceso@penginexr.com>". */
   MAIL_FROM?: string;
-  /** A quién avisar cuando un negocio marca un stand como perdido (wrangler secret o var). */
+  /** A quién avisar de un stand perdido, por defecto (el panel puede cambiarlo: app_settings). */
   ADMIN_NOTIFY_EMAIL?: string;
+  /** Origen público de los chips (enlaces de vinculación). Por defecto https://go.penginexr.com. */
+  PUBLIC_ORIGIN?: string;
   /** Solo desarrollo (.dev.vars): sin RESEND_API_KEY, escribe el correo en la consola. */
   MAIL_DEV_LOG?: string;
 }

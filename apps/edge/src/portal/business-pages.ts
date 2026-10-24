@@ -1,7 +1,14 @@
-import { LOYALTY_MAX_VISITS, LOYALTY_MIN_VISITS } from '@nfc/shared';
+import {
+  LOYALTY_MAX_VISITS,
+  LOYALTY_MIN_VISITS,
+  MAX_STAFF_DEVICES,
+  type PairingResponse,
+  type StaffDeviceSummary,
+} from '@nfc/shared';
 import type { AuditView } from '../audit.js';
 import { esc, TIME_ZONE } from '../html.js';
 import type { ProjectedTag } from '../internal/control-plane.js';
+import { qrSvg } from '../loyalty/pages.js';
 import type { LoyaltySummary } from '../loyalty/store.js';
 import { layout } from './pages.js';
 import type { PortalBusiness, PortalSession } from './session.js';
@@ -34,6 +41,12 @@ export const FLASH = {
     ok: false,
     text: `Las visitas deben ser un número entre ${LOYALTY_MIN_VISITS} y ${LOYALTY_MAX_VISITS}.`,
   },
+  vinculado_revocado: { ok: true, text: 'Móvil desvinculado: ya no puede validar canjes.' },
+  nombre_invalido: { ok: false, text: 'Ponle un nombre al móvil (por ejemplo «Caja – María»).' },
+  demasiados_moviles: {
+    ok: false,
+    text: `Ya tienes ${MAX_STAFF_DEVICES} móviles vinculados. Desvincula uno antes de añadir otro.`,
+  },
   premio_inactivo: {
     ok: false,
     text: 'El programa de fidelidad no está activo. Pídeselo a tu proveedor.',
@@ -56,7 +69,7 @@ function nav(business: PortalBusiness, session: PortalSession, loyalty: boolean)
   const back = session.businesses.length > 1 ? `<a href="/">← Tus negocios</a> · ` : '';
   return `<p class="small">${back}<a href="${base}">Chips</a> · <a href="${base}/estadisticas">Estadísticas</a>${
     loyalty ? ` · <a href="${base}/contactos.csv">Contactos (CSV)</a>` : ''
-  } · <a href="${base}/actividad">Actividad</a></p>`;
+  } · <a href="${base}/personal">Personal</a> · <a href="${base}/actividad">Actividad</a></p>`;
 }
 
 function status(tag: ProjectedTag): string {
@@ -190,6 +203,10 @@ function describe(entry: AuditView): string {
       return `Dio acceso al portal a ${esc(show(after['email']))}`;
     case 'account.removed':
       return `Quitó el acceso al portal a ${esc(show(before['email']))}`;
+    case 'staff.paired':
+      return `Vinculó el móvil «${esc(show(after['label']))}» para validar canjes`;
+    case 'staff.revoked':
+      return `Desvinculó el móvil «${esc(show(before['label']))}»`;
     case 'contacts.exported':
       return `Descargó los contactos de fidelidad (${esc(show(after['count']))})`;
     default:
@@ -224,6 +241,80 @@ export function activityPage(input: {
 <section class="card">
   <p class="small muted">Cada cambio en la configuración de tu negocio queda registrado: quién lo hizo, qué cambió y cuándo. Se guarda un año.</p>
   ${rows}
+</section>`,
+    input.session,
+  );
+}
+
+// ---------- Personal ----------
+
+export function staffPage(input: {
+  session: PortalSession;
+  business: PortalBusiness;
+  devices: StaffDeviceSummary[];
+  loyalty: boolean;
+  flash: FlashCode | null;
+}): string {
+  const base = `/n/${esc(input.business.id)}/personal`;
+  const list =
+    input.devices.length === 0
+      ? '<p class="muted">Ningún móvil vinculado todavía.</p>'
+      : `<ul class="plain">${input.devices
+          .map(
+            (d) => `<li>
+  <div><strong>${esc(d.label)}</strong></div>
+  <div class="small muted">Vinculado el ${esc(fmt(d.createdAt))}${d.createdBy ? ` por ${esc(d.createdBy)}` : ' por tu proveedor'} · ${
+    d.lastUsedAt ? `último uso ${esc(fmt(d.lastUsedAt))}` : 'sin usar todavía'
+  }</div>
+  <details><summary class="small">Desvincular</summary>
+    <form method="post" action="${base}/${esc(d.id)}/revocar" class="stack">
+      <p class="small muted">Este móvil dejará de validar canjes al instante.</p>
+      <button type="submit" class="btn">Sí, desvincular</button>
+    </form>
+  </details>
+</li>`,
+          )
+          .join('')}</ul>`;
+  return layout(
+    `Personal · ${input.business.name}`,
+    `${nav(input.business, input.session, input.loyalty)}
+<h1>Personal</h1>
+${flash(input.flash)}
+<section class="card">
+  <h2>Móviles que validan canjes</h2>
+  <p class="small muted">Cada móvil del local tiene su propia credencial: si se pierde o alguien deja de trabajar contigo, desvincula solo ese. Cada canje validado registra qué móvil lo hizo.</p>
+  ${list}
+</section>
+<section class="card">
+  <h2>Vincular un móvil</h2>
+  <form method="post" action="${base}" class="stack">
+    <label>Nombre del móvil
+      <input name="nombre" required maxlength="60" placeholder="Caja – María">
+    </label>
+    <button type="submit" class="btn btn-primary">Crear enlace de vinculación</button>
+  </form>
+</section>`,
+    input.session,
+  );
+}
+
+export function pairingPage(input: {
+  session: PortalSession;
+  business: PortalBusiness;
+  label: string;
+  pairing: PairingResponse;
+  loyalty: boolean;
+}): string {
+  return layout(
+    `Vincular móvil · ${input.business.name}`,
+    `${nav(input.business, input.session, input.loyalty)}
+<h1>Vincular «${esc(input.label)}»</h1>
+<section class="card">
+  <p>Con el móvil del local, escanea este QR con la cámara (o abre el enlace) y pulsa <strong>Vincular este móvil</strong>.</p>
+  <div class="qr">${qrSvg(input.pairing.url)}</div>
+  <p class="small"><code class="break">${esc(input.pairing.url)}</code></p>
+  <p class="small muted">Sirve una sola vez y caduca a las ${esc(fmt(input.pairing.expiresAt))}. No lo compartas: quien lo abra podrá validar canjes.</p>
+  <a class="btn" href="/n/${esc(input.business.id)}/personal">Listo</a>
 </section>`,
     input.session,
   );

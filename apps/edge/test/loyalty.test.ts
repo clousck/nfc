@@ -3,6 +3,7 @@ import { env } from 'cloudflare:workers';
 import type { BusinessRecord, LinkRecord, ReportRecord } from '@nfc/shared';
 import { beforeEach, describe, expect, it } from 'vitest';
 import worker from '../src/index.js';
+import { seedStaffDevice } from './staff-helpers.js';
 
 const ORIGIN = 'https://go.penginexr.com';
 const BIZ = 'b_cafe00000001';
@@ -95,7 +96,7 @@ async function setCard(fields: { stamps?: number; lastStampAt?: number; lastStam
 
 beforeEach(async () => {
   await env.DB.exec(
-    'DELETE FROM loyalty_stamps; DELETE FROM loyalty_redemptions; DELETE FROM loyalty_cards; DELETE FROM scans;',
+    'DELETE FROM loyalty_stamps; DELETE FROM loyalty_redemptions; DELETE FROM loyalty_cards; DELETE FROM scans; DELETE FROM staff_devices; DELETE FROM business_profile;',
   );
   await put(SLUG, {
     type: 'loyalty',
@@ -283,17 +284,16 @@ describe('canje y validación', () => {
     expect((await call(`/l/canjear/${BIZ}`, { method: 'POST', cookies })).status).toBe(409);
   });
 
-  it('el personal activa su móvil y valida el canje una sola vez', async () => {
+  it('un móvil vinculado valida el canje una sola vez y queda registrado cuál fue', async () => {
     const code = await redeemNow(await fullCard());
 
-    // Sin activar: no valida nada.
+    // Sin vincular: no valida nada (ni con la cookie vieja del enlace de estadísticas).
     const anonymous = await (await call(`/v/${code}`)).text();
     expect(anonymous).toContain('pantalla es para el personal');
+    const legacy = await (await call(`/v/${code}`, { cookies: [`nfc_staff=${TOKEN}`] })).text();
+    expect(legacy).toContain('pantalla es para el personal');
 
-    const activate = await call(`/r/${TOKEN}/validador`, { method: 'POST' });
-    expect(activate.status).toBe(303);
-    const staff = [cookieFrom(activate, 'nfc_staff')];
-
+    const staff = [await seedStaffDevice(BIZ)];
     const first = await (await call(`/v/${code}`, { cookies: staff })).text();
     expect(first).toContain('Canje válido');
     expect(first).toContain('María');
@@ -301,6 +301,16 @@ describe('canje y validación', () => {
 
     const second = await (await call(`/v/${code}`, { cookies: staff })).text();
     expect(second).toContain('ya se usó');
+
+    const row = await env.DB.prepare(
+      'SELECT r.validated_by_device, d.label FROM loyalty_redemptions r JOIN staff_devices d ON d.id = r.validated_by_device',
+    ).first<{ label: string }>();
+    expect(row?.label).toBe('Caja');
+  });
+
+  it('el enlace de estadísticas ya no activa validadores', async () => {
+    const res = await call(`/r/${TOKEN}/validador`, { method: 'POST' });
+    expect(res.headers.get('set-cookie')).toBeNull();
   });
 
   it('el cliente ve en vivo que el local validó su premio', async () => {
@@ -309,9 +319,7 @@ describe('canje y validación', () => {
     const before = await (await call(`/l/canje/${code}/estado`, { cookies })).json();
     expect(before).toEqual({ validated: false });
 
-    const staff = [
-      cookieFrom(await call(`/r/${TOKEN}/validador`, { method: 'POST' }), 'nfc_staff'),
-    ];
+    const staff = [await seedStaffDevice(BIZ)];
     await call(`/v/${code}`, { cookies: staff });
     const after = await (await call(`/l/canje/${code}/estado`, { cookies })).json();
     expect(after).toEqual({ validated: true });
@@ -319,9 +327,7 @@ describe('canje y validación', () => {
 
   it('el personal de otro negocio no puede validar', async () => {
     const code = await redeemNow(await fullCard());
-    const staff = [
-      cookieFrom(await call(`/r/${OTHER_TOKEN}/validador`, { method: 'POST' }), 'nfc_staff'),
-    ];
+    const staff = [await seedStaffDevice(OTHER_BIZ)];
     const res = await call(`/v/${code}`, { cookies: staff });
     expect(res.status).toBe(404);
     expect(await res.text()).toContain('Código no válido');
@@ -348,8 +354,8 @@ describe('baja y privacidad', () => {
     await register();
     const html = await (await call(`/r/${TOKEN}`)).text();
     expect(html).toContain('Programa de fidelidad');
-    expect(html).toContain('Usar este móvil para validar canjes');
-    expect(html).toContain('Color de hoy');
+    expect(html).toContain('vincula el móvil de caja desde el portal');
+    expect(html).not.toContain('validador');
     expect(html).not.toContain('María');
     expect(html).not.toContain('99123');
   });
@@ -396,10 +402,5 @@ describe('protección de formularios', () => {
       form: { nombre: 'Ana', telefono: '0991234567', acepto: 'on', fuente: 'nfc' },
     });
     expect(res.status).toBe(403);
-  });
-
-  it('activar el validador también funciona con Origin: null', async () => {
-    const res = await call(`/r/${TOKEN}/validador`, { method: 'POST' });
-    expect(res.status).toBe(303);
   });
 });

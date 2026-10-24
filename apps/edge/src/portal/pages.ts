@@ -50,6 +50,9 @@ const STYLES = `
   summary { cursor: pointer; color: var(--accent); }
   details form { margin-top: .5rem; }
   .card form + form, .card form + details { margin-top: .75rem; }
+  .qr { max-width: 16rem; margin: 1rem auto; background: #fff; padding: .5rem; border-radius: 8px; }
+  .qr svg { display: block; width: 100%; height: auto; }
+  .break { word-break: break-all; }
 `;
 
 export function layout(title: string, body: string, session?: PortalSession | null): string {

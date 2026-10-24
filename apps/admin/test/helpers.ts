@@ -2,6 +2,7 @@ import { fileURLToPath } from 'node:url';
 import {
   projectAll,
   type AccountSummary,
+  type AppSettingsBody,
   type ApplyResponse,
   type BusinessSettings,
   type BusinessState,
@@ -13,6 +14,7 @@ import {
   type PutBusinessSettingsBody,
   type PutTagSettingsBody,
   type RateLimitIncidentsResponse,
+  type StaffDeviceSummary,
   type SyncBody,
   type TagScanStatsResponse,
   type TagSettings,
@@ -49,6 +51,8 @@ export class FakeEdge implements EdgeClient {
   incidentList: RateLimitIncidentsResponse['incidents'] = [];
   /** businessId → cuentas con acceso. */
   accountsByBusiness = new Map<string, AccountSummary[]>();
+  staffByBusiness = new Map<string, StaffDeviceSummary[]>();
+  adminNotifyEmail = 'victor.ees.ec@gmail.com';
   tagSettings = new Map<string, TagSettings>();
   businessSettings = new Map<string, BusinessSettings>();
   private clock = 1;
@@ -249,6 +253,41 @@ export class FakeEdge implements EdgeClient {
       url: `https://negocios.penginexr.com/entrar/${'t'.repeat(43)}`,
       expiresAt: Date.now() + 86_400_000,
     };
+  }
+
+  async staffDevices(businessId: string) {
+    this.check(`GET staff:${businessId}`);
+    return { devices: this.staffByBusiness.get(businessId) ?? [] };
+  }
+
+  async createPairing(businessId: string, _label: string) {
+    this.check(`POST pairing:${businessId}`);
+    if (!this.businesses.has(businessId)) throw new EdgeError('Worker → 404', 404);
+    return {
+      url: `https://go.penginexr.com/vincular/${'p'.repeat(43)}`,
+      expiresAt: Date.now() + 15 * 60_000,
+    };
+  }
+
+  async revokeStaffDevice(businessId: string, deviceId: string) {
+    this.check(`DELETE staff:${businessId}:${deviceId}`);
+    const list = this.staffByBusiness.get(businessId) ?? [];
+    if (!list.some((d) => d.id === deviceId)) throw new EdgeError('Worker → 404', 404);
+    this.staffByBusiness.set(
+      businessId,
+      list.filter((d) => d.id !== deviceId),
+    );
+  }
+
+  async appSettings() {
+    this.check('GET app-settings');
+    return { adminNotifyEmail: this.adminNotifyEmail };
+  }
+
+  async setAppSettings(body: AppSettingsBody) {
+    this.check('PUT app-settings');
+    this.adminNotifyEmail = body.adminNotifyEmail;
+    return body;
   }
 
   async tagScans(slug: string, since: number | null) {

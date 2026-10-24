@@ -2,8 +2,6 @@ import { randomBase62 } from '@nfc/shared';
 
 /** Cookie que identifica el navegador del cliente (su tarjeta en cada negocio). */
 export const DEVICE_COOKIE = 'nfc_dev';
-/** Cookie que marca un móvil del personal como validador de canjes (valor = token del reporte). */
-export const STAFF_COOKIE = 'nfc_staff';
 
 // 400 días: el máximo que Chrome permite; se renueva en cada visita.
 const COOKIE_MAX_AGE = 400 * 24 * 60 * 60;

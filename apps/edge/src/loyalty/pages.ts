@@ -1,4 +1,9 @@
-import { formatRedemptionCode, LOYALTY_EXPIRY_DAYS } from '@nfc/shared';
+import {
+  formatRedemptionCode,
+  LOYALTY_EXPIRY_DAYS,
+  MAX_STAFF_DEVICES,
+  PAIRING_PATH,
+} from '@nfc/shared';
 import qrcode from 'qrcode-generator';
 import { esc, TIME_ZONE } from '../html.js';
 
@@ -338,11 +343,69 @@ export function validationPage(businessName: string | null, outcome: ValidationO
   <h1>Validación de canjes</h1>
   <p>Esta pantalla es para el personal del local.</p>
   <p class="muted">Si eres el cliente: muestra tu código QR al cajero.</p>
-  <p class="muted">Si eres del local: abre el enlace de estadísticas del negocio en este móvil y pulsa «Usar este móvil para validar canjes».</p>
+  <p class="muted">Si eres del local: este móvil aún no está vinculado. Pide al dueño que lo vincule desde el portal del negocio (Personal → Vincular dispositivo).</p>
 </section>`;
       break;
   }
   return layout('Validar canje', body);
+}
+
+// ---------- Móvil del personal ----------
+
+export function staffHomePage(input: {
+  businessName: string;
+  label: string;
+  color: { name: string; hex: string };
+  error: boolean;
+}): string {
+  const body = `
+<section class="card">
+  <p class="eyebrow">${esc(input.businessName)} · ${esc(input.label)}</p>
+  <h1>Validar canjes</h1>
+  <p>Escanea con la cámara el QR que muestra el cliente. Si no se puede, escribe el código:</p>
+  ${input.error ? '<p class="alert">Ese código no es válido. Revísalo e inténtalo otra vez.</p>' : ''}
+  <form method="get" action="/v" class="form">
+    <label>Código
+      <input name="codigo" required placeholder="K7PQ-42XZ" autocomplete="off" autocapitalize="characters">
+    </label>
+    <button type="submit" class="btn btn-primary">Validar</button>
+  </form>
+  <p class="muted small">Color de hoy: <strong>${esc(input.color.name)}</strong>. La pantalla de canje del cliente tiene este color y un reloj con segundos: una captura de pantalla no lo tiene.</p>
+</section>`;
+  return layout('Validar canjes', body);
+}
+
+export function pairingConfirmPage(input: {
+  businessName: string;
+  label: string;
+  token: string;
+}): string {
+  const body = `
+<section class="card">
+  <h1>Vincular este móvil</h1>
+  <p>Este móvil quedará como <strong>${esc(input.label)}</strong> para validar canjes de <strong>${esc(input.businessName)}</strong>.</p>
+  <p class="muted small">Ábrelo en el móvil que se queda en el local. El dueño puede desvincularlo cuando quiera.</p>
+  <form method="post" action="${PAIRING_PATH}/${esc(input.token)}" class="form">
+    <button type="submit" class="btn btn-primary">Vincular este móvil</button>
+  </form>
+</section>`;
+  return layout('Vincular móvil', body);
+}
+
+export function pairingInvalidPage(): string {
+  return layout(
+    'Enlace no válido',
+    `<section class="card"><h1>Este enlace ya no sirve</h1>
+<p>Caducó (dura 15 minutos) o ya se usó. Pide al dueño que genere otro desde el portal.</p></section>`,
+  );
+}
+
+export function pairingTooManyPage(): string {
+  return layout(
+    'Demasiados móviles',
+    `<section class="card"><h1>No se pudo vincular</h1>
+<p>El negocio ya tiene el máximo de ${MAX_STAFF_DEVICES} móviles vinculados. El dueño debe desvincular uno en el portal y generar un enlace nuevo.</p></section>`,
+  );
 }
 
 // ---------- Privacidad y baja ----------

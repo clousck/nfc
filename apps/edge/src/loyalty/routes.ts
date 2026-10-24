@@ -3,11 +3,9 @@ import {
   businessKey,
   LinkRecord,
   normalizePhone,
+  PAIRING_PATH,
   parseRedemptionCode,
   REDEMPTION_CODE_PATTERN,
-  reportKey,
-  ReportRecord,
-  REPORT_TOKEN_PATTERN,
 } from '@nfc/shared';
 import { Hono, type Context } from 'hono';
 import type { Env } from '../env.js';
@@ -18,10 +16,14 @@ import {
   colorOfDay,
   deleteConfirmPage,
   messagePage,
+  pairingConfirmPage,
+  pairingInvalidPage,
+  pairingTooManyPage,
   privacyPage,
   redeemConfirmPage,
   redemptionPage,
   signupPage,
+  staffHomePage,
   validationPage,
   type CardMessage,
   type ValidationOutcome,
@@ -34,8 +36,14 @@ import {
   newDeviceToken,
   readCookie,
   readDeviceToken,
-  STAFF_COOKIE,
 } from './security.js';
+import {
+  completePairing,
+  pendingPairing,
+  readStaffDevice,
+  STAFF_COOKIE,
+  staffCookie,
+} from '../staff/store.js';
 import {
   addStamp,
   createCard,
@@ -374,26 +382,18 @@ loyaltyRoutes.get('/l/canje/:code/estado', async (c) => {
   });
 });
 
-/** Reporte del negocio cuyo móvil del personal está activado como validador. */
-async function staffReport(c: AppContext): Promise<ReportRecord | null> {
-  const token = readCookie(c.req.raw, STAFF_COOKIE);
-  if (!token || !REPORT_TOKEN_PATTERN.test(token)) return null;
-  const parsed = ReportRecord.safeParse(await c.env.LINKS.get(reportKey(token), 'json'));
-  return parsed.success ? parsed.data : null;
-}
-
-/** El cajero escanea el QR del cliente con la cámara: abre esta URL en su móvil. */
+/** El cajero escanea el QR del cliente con la cámara: abre esta URL en su móvil vinculado. */
 loyaltyRoutes.get('/v/:code', async (c) => {
-  const report = await staffReport(c);
-  // El personal (cookie de validador) tiene 3× el límite público.
+  const device = await readStaffDevice(c.env, c.req.raw, c.executionCtx);
+  // El personal (móvil vinculado) tiene 3× el límite público.
   const allowed = await allowRequest(c.env, c.executionCtx, [
-    report
+    device
       ? {
           action: 'validate',
           scope: 'staff',
           actor: 'staff',
-          key: await hashToken(readCookie(c.req.raw, STAFF_COOKIE) ?? ''),
-          businessId: report.businessId,
+          key: device.id,
+          businessId: device.businessId,
         }
       : {
           action: 'validate',
@@ -404,13 +404,13 @@ loyaltyRoutes.get('/v/:code', async (c) => {
         },
   ]);
   if (!allowed) return tooMany();
-  if (!report) return html(validationPage(null, { kind: 'not_staff' }));
+  if (!device) return html(validationPage(null, { kind: 'not_staff' }));
   const code = parseRedemptionCode(c.req.param('code'));
   const redemption = code ? await findRedemption(c.env.DB, code) : null;
   let outcome: ValidationOutcome;
-  if (!redemption || redemption.businessId !== report.businessId) {
+  if (!redemption || redemption.businessId !== device.businessId) {
     outcome = { kind: 'invalid' };
-  } else if (await validateRedemption(c.env.DB, redemption.code, Date.now())) {
+  } else if (await validateRedemption(c.env.DB, redemption.code, Date.now(), device.id)) {
     outcome = {
       kind: 'valid',
       customerName: redemption.customerName,
@@ -424,22 +424,46 @@ loyaltyRoutes.get('/v/:code', async (c) => {
       customerName: redemption.customerName,
     };
   }
-  return html(validationPage(report.name, outcome), outcome.kind === 'invalid' ? 404 : 200);
+  return html(
+    validationPage(device.businessName, outcome),
+    outcome.kind === 'invalid' ? 404 : 200,
+    // Renueva la cookie del móvil (máximo 400 días).
+    { 'set-cookie': staffCookie(readCookie(c.req.raw, STAFF_COOKIE) ?? '') },
+  );
 });
 
-/** Código tecleado a mano desde el enlace de estadísticas. */
-loyaltyRoutes.get('/v', (c) => {
+/** Inicio del móvil del personal: escribir el código a mano si no se puede escanear. */
+loyaltyRoutes.get('/v', async (c) => {
   const code = parseRedemptionCode(c.req.query('codigo') ?? '');
-  return code ? redirect(`/v/${code}`) : html(validationPage(null, { kind: 'invalid' }), 404);
+  if (code) return redirect(`/v/${code}`);
+  const device = await readStaffDevice(c.env, c.req.raw, c.executionCtx);
+  if (!device) return html(validationPage(null, { kind: 'not_staff' }));
+  return html(
+    staffHomePage({
+      businessName: device.businessName,
+      label: device.label,
+      color: colorOfDay(localDay(Date.now(), offset(c.env))),
+      error: c.req.query('codigo') !== undefined,
+    }),
+  );
 });
 
-/** Activa este móvil como validador de canjes del negocio (desde su enlace de estadísticas). */
-loyaltyRoutes.post('/r/:token/validador', async (c) => {
-  const token = c.req.param('token');
-  if (!REPORT_TOKEN_PATTERN.test(token) || !(await c.env.LINKS.get(reportKey(token)))) {
-    return notAvailable();
+/** Vincular un móvil del personal: el GET no gasta el enlace (lo pueden abrir previsualizadores). */
+loyaltyRoutes.get(`${PAIRING_PATH}/:token`, async (c) => {
+  const pending = await pendingPairing(c.env, c.req.param('token'));
+  if (!pending) return html(pairingInvalidPage(), 410);
+  return html(pairingConfirmPage({ ...pending, token: c.req.param('token') }));
+});
+
+loyaltyRoutes.post(`${PAIRING_PATH}/:token`, async (c) => {
+  const result = await completePairing(c.env, c.req.param('token'));
+  if (!result.ok) {
+    return html(
+      result.error === 'too_many' ? pairingTooManyPage() : pairingInvalidPage(),
+      result.error === 'too_many' ? 409 : 410,
+    );
   }
-  return redirect(`/r/${token}#validar`, { 'set-cookie': cookieHeader(STAFF_COOKIE, token) });
+  return redirect('/v', { 'set-cookie': staffCookie(result.cookieToken) });
 });
 
 loyaltyRoutes.get('/l/privacidad/:businessId', async (c) => {

@@ -7,6 +7,7 @@ import { Badge } from './ui';
 import { BusinessesPage } from './pages/BusinessesPage';
 import { BusinessPage } from './pages/BusinessPage';
 import { ChipsPage } from './pages/ChipsPage';
+import { SettingsPage } from './pages/SettingsPage';
 import { TagPage } from './pages/TagPage';
 
 export function App() {
@@ -21,6 +22,7 @@ export function App() {
             <Route path="/chips" element={<ChipsPage />} />
             <Route path="/inventario" element={<Navigate to="/chips?ver=libres" replace />} />
             <Route path="/chips/:slug" element={<TagPage />} />
+            <Route path="/ajustes" element={<SettingsPage />} />
             <Route path="*" element={<NotFound />} />
           </Routes>
         </main>
@@ -72,6 +74,9 @@ function Header() {
           </NavLink>
           <NavLink to="/chips" end>
             Chips
+          </NavLink>
+          <NavLink to="/ajustes" end>
+            Ajustes
           </NavLink>
         </nav>
         {pending > 0 ? (

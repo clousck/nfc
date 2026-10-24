@@ -1,7 +1,9 @@
 import { zValidator } from '@hono/zod-validator';
 import {
   AccountId,
+  AppSettingsBody,
   BusinessId,
+  CreatePairingBody,
   CreateAccountBody,
   DeleteQuery,
   IncidentsQuery,
@@ -12,11 +14,14 @@ import {
   ScanStatsQuery,
   SettingsChangesQuery,
   Slug,
+  StaffDeviceId,
   SyncBody,
 } from '@nfc/shared';
 import { Hono } from 'hono';
 import { z } from 'zod';
 import { addAccount, createLoginLink, listAccounts, removeAccount } from '../accounts/store.js';
+import { adminNotifyEmail, setAdminNotifyEmail } from '../app-settings.js';
+import { createPairing, listStaffDevices, revokeStaffDevice } from '../staff/store.js';
 import type { Env } from '../env.js';
 import { incidentSummary } from '../rate-limit.js';
 import { internalAuth } from './auth.js';
@@ -169,6 +174,48 @@ internalRoutes.post('/businesses/:id/accounts/:accountId/login-link', accountPar
   const { id, accountId } = c.req.valid('param');
   const link = await createLoginLink(c.env, id, accountId);
   return link ? c.json(link) : c.json({ error: 'not_found' }, 404);
+});
+
+// Móviles del personal (el admin también puede vincularlos y revocarlos).
+internalRoutes.get('/businesses/:id/staff', businessParam, async (c) => {
+  return c.json({ devices: await listStaffDevices(c.env.DB, c.req.valid('param').id) });
+});
+
+internalRoutes.post(
+  '/businesses/:id/staff/pairing',
+  businessParam,
+  json('json', CreatePairingBody),
+  async (c) => {
+    const { id } = c.req.valid('param');
+    const exists = await c.env.DB.prepare(
+      'SELECT 1 AS ok FROM business_profile WHERE id = ? AND deleted = 0',
+    )
+      .bind(id)
+      .first();
+    if (!exists) return c.json({ error: 'not_found' }, 404);
+    return c.json(await createPairing(c.env, id, c.req.valid('json').label, { type: 'admin' }));
+  },
+);
+
+internalRoutes.delete(
+  '/businesses/:id/staff/:deviceId',
+  zValidator('param', z.object({ id: BusinessId, deviceId: StaffDeviceId })),
+  async (c) => {
+    const { id, deviceId } = c.req.valid('param');
+    const revoked = await revokeStaffDevice(c.env, id, deviceId, { type: 'admin' });
+    return revoked ? c.json({ revoked: true }) : c.json({ error: 'not_found' }, 404);
+  },
+);
+
+// Ajustes globales del admin.
+internalRoutes.get('/app-settings', async (c) => {
+  return c.json({ adminNotifyEmail: (await adminNotifyEmail(c.env)) ?? '' });
+});
+
+internalRoutes.put('/app-settings', json('json', AppSettingsBody), async (c) => {
+  const body = c.req.valid('json');
+  await setAdminNotifyEmail(c.env, body.adminNotifyEmail);
+  return c.json(body);
 });
 
 /** Incidentes de límite de peticiones (de un negocio o de todos). */

@@ -7,3 +7,4 @@ export * from './loyalty.js';
 export * from './projection.js';
 export * from './internal-api.js';
 export * from './accounts.js';
+export * from './staff.js';

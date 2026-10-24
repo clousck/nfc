@@ -247,12 +247,18 @@ export async function findPendingRedemption(db: D1Database, cardId: number, sinc
 }
 
 /** Marca el canje como validado por el local. Devuelve false si ya lo estaba. */
-export async function validateRedemption(db: D1Database, code: string, now: number) {
+export async function validateRedemption(
+  db: D1Database,
+  code: string,
+  now: number,
+  deviceId: string | null = null,
+) {
   const result = await db
     .prepare(
-      'UPDATE loyalty_redemptions SET validated_at = ? WHERE code = ? AND validated_at IS NULL',
+      `UPDATE loyalty_redemptions SET validated_at = ?, validated_by_device = ?
+       WHERE code = ? AND validated_at IS NULL`,
     )
-    .bind(now, code)
+    .bind(now, deviceId, code)
     .run();
   return result.meta.changes > 0;
 }

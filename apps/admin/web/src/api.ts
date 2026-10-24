@@ -2,14 +2,18 @@
 import type {
   AccountDto,
   AccountsDto,
+  AppSettingsDto,
   BusinessDetailDto,
   BusinessDto,
   LoyaltyCardDto,
   LoginLinkDto,
   LoyaltyDto,
+  PairingDto,
   PublishStatusDto,
   RateLimitIncidentsDto,
   ResyncDto,
+  StaffDeviceDto,
+  StaffDevicesDto,
   SyncResult,
   TagDto,
   TagScanStats,
@@ -26,6 +30,9 @@ export type TagView = TagDto & { sync?: SyncResult };
 export type LoyaltyCard = LoyaltyCardDto;
 export type Account = AccountDto;
 export type LoginLink = LoginLinkDto;
+export type StaffDevice = StaffDeviceDto;
+export type Pairing = PairingDto;
+export type AppSettings = AppSettingsDto;
 
 export type BusinessInput = Partial<
   Pick<Business, 'name' | 'contactName' | 'phone' | 'plan' | 'status' | 'notes' | 'loyaltyVisits'>
@@ -117,6 +124,14 @@ export const api = {
     request<{ removed: true }>('DELETE', `/api/businesses/${id}/accounts/${accountId}`),
   loginLink: (id: string, accountId: string) =>
     request<LoginLink>('POST', `/api/businesses/${id}/accounts/${accountId}/login-link`),
+  listStaff: (id: string) => request<StaffDevicesDto>('GET', `/api/businesses/${id}/staff`),
+  createPairing: (id: string, label: string) =>
+    request<PairingDto>('POST', `/api/businesses/${id}/staff/pairing`, { label }),
+  revokeStaff: (id: string, deviceId: string) =>
+    request<{ revoked: true }>('DELETE', `/api/businesses/${id}/staff/${deviceId}`),
+  getAppSettings: () => request<AppSettingsDto>('GET', '/api/app-settings'),
+  saveAppSettings: (input: AppSettingsDto) =>
+    request<AppSettingsDto>('PUT', '/api/app-settings', input),
   regenerateReport: (id: string) =>
     request<WithSync<Business>>('POST', `/api/businesses/${id}/report-token`),
 

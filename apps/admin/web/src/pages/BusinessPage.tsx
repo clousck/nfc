@@ -4,6 +4,7 @@ import { api, type BusinessDetail, type Tag } from '../api';
 import { LoyaltyProgram } from '../components/LoyaltyProgram';
 import { OwnerAccounts } from '../components/OwnerAccounts';
 import { RateLimitIncidents } from '../components/RateLimitIncidents';
+import { StaffDevices } from '../components/StaffDevices';
 import { ReportLink } from '../components/ReportLink';
 import { useResource } from '../hooks';
 import { useNotices } from '../notices';
@@ -53,6 +54,8 @@ export function BusinessPage() {
       <LoyaltyProgram business={data} onChanged={business.reload} />
 
       <OwnerAccounts business={data} />
+
+      {data.loyaltyVisits !== null && <StaffDevices business={data} />}
 
       <ReportLink business={data} onChanged={business.reload} />
 

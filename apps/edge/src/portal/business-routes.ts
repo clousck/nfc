@@ -1,5 +1,12 @@
-import { LoyaltyVisits, TargetUrl, type ReportRecord } from '@nfc/shared';
+import {
+  LoyaltyVisits,
+  MAX_STAFF_DEVICES,
+  StaffLabel,
+  TargetUrl,
+  type ReportRecord,
+} from '@nfc/shared';
 import { Hono } from 'hono';
+import { adminNotifyEmail } from '../app-settings.js';
 import { auditStatement, listAudit } from '../audit.js';
 import type { Env } from '../env.js';
 import { esc, pageHeaders, STRICT_CSP } from '../html.js';
@@ -13,7 +20,15 @@ import { loyaltyContacts } from '../internal/queries.js';
 import { loyaltySummary } from '../loyalty/store.js';
 import { queryReportStats } from '../report.js';
 import { renderReportPage } from '../report-page.js';
-import { activityPage, businessPage, isFlashCode, type FlashCode } from './business-pages.js';
+import { createPairing, listStaffDevices, revokeStaffDevice } from '../staff/store.js';
+import {
+  activityPage,
+  businessPage,
+  isFlashCode,
+  pairingPage,
+  staffPage,
+  type FlashCode,
+} from './business-pages.js';
 import { mailSender } from './mail.js';
 import { messagePage } from './pages.js';
 import type { PortalBusiness, PortalSession } from './session.js';
@@ -29,11 +44,14 @@ type BusinessEnv = {
 const html = (body: string, status = 200) =>
   new Response(body, { status, headers: pageHeaders(STRICT_CSP) });
 
-const back = (businessId: string, code: FlashCode) =>
+const back = (businessId: string, code: FlashCode, page = '') =>
   new Response(null, {
     status: 303,
-    headers: { location: `/n/${businessId}?m=${code}`, 'cache-control': 'no-store' },
+    headers: { location: `/n/${businessId}${page}?m=${code}`, 'cache-control': 'no-store' },
   });
+
+const hasLoyalty = async (env: Env, id: string) =>
+  ((await businessState(env.DB, id))?.loyaltyVisits ?? null) !== null;
 
 /** Campo CSV seguro: comillas escapadas y sin fórmulas (=, +, -, @) que Excel ejecutaría. */
 function csvField(value: string): string {
@@ -152,8 +170,9 @@ async function notifyLostStand(
   by: string,
   now: number,
 ): Promise<void> {
-  if (!env.ADMIN_NOTIFY_EMAIL) {
-    console.warn('Stand perdido sin ADMIN_NOTIFY_EMAIL', { business: business.id, slug });
+  const to = await adminNotifyEmail(env);
+  if (!to) {
+    console.warn('Stand perdido sin correo de aviso', { business: business.id, slug });
     return;
   }
   const tag = (await businessTags(env.DB, business.id)).find((t) => t.slug === slug);
@@ -161,7 +180,7 @@ async function notifyLostStand(
   const when = new Date(now).toISOString();
   const text = `${business.name} marcó el chip ${chip} como stand perdido o dañado.\n\nMarcado por: ${by}\nFecha: ${when}\n\nEl chip quedó pausado (no liberado). Visita el local o repón el stand; puedes reactivarlo desde el panel.`;
   await mailSender(env).send({
-    to: env.ADMIN_NOTIFY_EMAIL,
+    to,
     subject: `Stand perdido: ${business.name} · chip ${chip}`,
     text,
     html: `<p>${esc(text).replace(/\n/g, '<br>')}</p>`,
@@ -202,8 +221,14 @@ businessRoutes.get('/estadisticas', async (c) => {
       since: t.assignedAt,
     })),
   };
-  const stats = await queryReportStats(c.env.DB, report, now, offset(c.env));
-  return html(renderReportPage(report, stats, now, null, { backUrl: `/n/${business.id}` }));
+  const [stats, state] = await Promise.all([
+    queryReportStats(c.env.DB, report, now, offset(c.env)),
+    businessState(c.env.DB, business.id),
+  ]);
+  const visits = state?.loyaltyVisits ?? null;
+  const loyalty =
+    visits === null ? null : { visits, summary: await loyaltySummary(c.env.DB, business.id, now) };
+  return html(renderReportPage(report, stats, now, loyalty, { backUrl: `/n/${business.id}` }));
 });
 
 /** Contactos que aceptaron promociones. La descarga queda en la auditoría (datos personales). */
@@ -251,4 +276,61 @@ businessRoutes.get('/actividad', async (c) => {
       loyalty: (state?.loyaltyVisits ?? null) !== null,
     }),
   );
+});
+
+// ---------- Personal: móviles que validan canjes ----------
+
+businessRoutes.get('/personal', async (c) => {
+  const business = c.get('business');
+  const [devices, loyalty] = await Promise.all([
+    listStaffDevices(c.env.DB, business.id),
+    hasLoyalty(c.env, business.id),
+  ]);
+  const m = c.req.query('m');
+  return html(
+    staffPage({
+      session: c.get('session'),
+      business,
+      devices,
+      loyalty,
+      flash: isFlashCode(m) ? m : null,
+    }),
+  );
+});
+
+/** Crea el enlace de vinculación y lo muestra una sola vez (no se puede volver a ver). */
+businessRoutes.post('/personal', async (c) => {
+  const business = c.get('business');
+  const form = await c.req.formData();
+  const label = StaffLabel.safeParse(String(form.get('nombre') ?? ''));
+  if (!label.success || label.data === '') {
+    return back(business.id, 'nombre_invalido', '/personal');
+  }
+  const devices = await listStaffDevices(c.env.DB, business.id);
+  if (devices.length >= MAX_STAFF_DEVICES) {
+    return back(business.id, 'demasiados_moviles', '/personal');
+  }
+  const session = c.get('session');
+  const pairing = await createPairing(c.env, business.id, label.data, {
+    type: 'owner',
+    id: session.accountId,
+  });
+  return html(
+    pairingPage({
+      session,
+      business,
+      label: label.data,
+      pairing,
+      loyalty: await hasLoyalty(c.env, business.id),
+    }),
+  );
+});
+
+businessRoutes.post('/personal/:deviceId/revocar', async (c) => {
+  const business = c.get('business');
+  await revokeStaffDevice(c.env, business.id, c.req.param('deviceId'), {
+    type: 'owner',
+    id: c.get('session').accountId,
+  });
+  return back(business.id, 'vinculado_revocado', '/personal');
 });
