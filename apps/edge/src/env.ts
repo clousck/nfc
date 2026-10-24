@@ -15,4 +15,11 @@ export interface Env {
   RL_NETWORK: RateLimit;
   RL_STAFF: RateLimit;
   RL_INCIDENT_LOG: RateLimit;
+  RL_LOGIN: RateLimit;
+  /** Clave de Resend para enviar los enlaces de acceso (wrangler secret). */
+  RESEND_API_KEY?: string;
+  /** Remitente de los correos, p. ej. "PengineXR <acceso@penginexr.com>". */
+  MAIL_FROM?: string;
+  /** Solo desarrollo (.dev.vars): sin RESEND_API_KEY, escribe el correo en la consola. */
+  MAIL_DEV_LOG?: string;
 }

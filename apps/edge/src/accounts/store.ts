@@ -152,13 +152,11 @@ export async function removeAccount(
   return true;
 }
 
-/** Crea un enlace de acceso de un solo uso. Devuelve null si la cuenta no tiene ese negocio. */
+/** Enlace de acceso de un solo uso (el admin lo copia desde el panel). null si no es miembro. */
 export async function createLoginLink(
   env: Env,
   businessId: string,
   accountId: string,
-  purpose: 'invite' | 'email',
-  ttlMs = INVITE_LINK_TTL_MS,
   now = Date.now(),
 ): Promise<LoginLinkResponse | null> {
   const member = await env.DB.prepare(
@@ -168,6 +166,16 @@ export async function createLoginLink(
     .bind(accountId, businessId)
     .first<{ ok: number }>();
   if (!member) return null;
+  return issueLoginToken(env, accountId, 'invite', INVITE_LINK_TTL_MS, now);
+}
+
+export async function issueLoginToken(
+  env: Env,
+  accountId: string,
+  purpose: 'invite' | 'email',
+  ttlMs: number,
+  now = Date.now(),
+): Promise<LoginLinkResponse> {
   // 43 caracteres base62 ≈ 256 bits: imposible de adivinar.
   const token = randomBase62(43);
   const expiresAt = now + ttlMs;

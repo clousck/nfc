@@ -69,3 +69,15 @@ CREATE TABLE IF NOT EXISTS login_tokens (
   used_at INTEGER
 );
 CREATE INDEX IF NOT EXISTS idx_login_tokens_expires ON login_tokens(expires_at);
+
+-- Sesiones del portal (cookie __Host-nfc_session, 30 días). Solo se guarda el hash.
+CREATE TABLE IF NOT EXISTS sessions (
+  id_hash TEXT PRIMARY KEY,
+  account_id TEXT NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+  created_at INTEGER NOT NULL,
+  expires_at INTEGER NOT NULL,
+  last_seen_at INTEGER NOT NULL,
+  revoked_at INTEGER
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_account ON sessions(account_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires ON sessions(expires_at);

@@ -4,9 +4,9 @@ import type { Env } from './env.js';
 // Límites de peticiones (docs/SECURITY.md §4). Se limita lo que escribe datos o se puede
 // adivinar; nunca la redirección de un chip. La IP solo se usa en memoria para contar.
 
-export type RateAction = 'signup' | 'redeem' | 'validate';
-/** Qué límite se aplica: por móvil, por red (IP + negocio) o por credencial del personal. */
-export type RateScope = 'device' | 'network' | 'staff';
+export type RateAction = 'signup' | 'redeem' | 'validate' | 'login';
+/** Qué límite se aplica: por móvil, por red (IP + negocio), por credencial del personal o por correo. */
+export type RateScope = 'device' | 'network' | 'staff' | 'login';
 export type RateActor = 'customer' | 'staff' | 'anonymous';
 
 export interface RateCheck {
@@ -19,10 +19,11 @@ export interface RateCheck {
   businessId: string | null;
 }
 
-const LIMITERS: Record<RateScope, 'RL_DEVICE' | 'RL_NETWORK' | 'RL_STAFF'> = {
+const LIMITERS: Record<RateScope, 'RL_DEVICE' | 'RL_NETWORK' | 'RL_STAFF' | 'RL_LOGIN'> = {
   device: 'RL_DEVICE',
   network: 'RL_NETWORK',
   staff: 'RL_STAFF',
+  login: 'RL_LOGIN',
 };
 
 const MINUTE_MS = 60_000;

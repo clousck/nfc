@@ -167,7 +167,7 @@ internalRoutes.delete('/businesses/:id/accounts/:accountId', accountParam, async
 
 internalRoutes.post('/businesses/:id/accounts/:accountId/login-link', accountParam, async (c) => {
   const { id, accountId } = c.req.valid('param');
-  const link = await createLoginLink(c.env, id, accountId, 'invite');
+  const link = await createLoginLink(c.env, id, accountId);
   return link ? c.json(link) : c.json({ error: 'not_found' }, 404);
 });
 

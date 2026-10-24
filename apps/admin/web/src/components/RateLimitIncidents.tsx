@@ -6,6 +6,7 @@ const ACTIONS: Record<string, string> = {
   signup: 'Alta de tarjeta',
   redeem: 'Canje de premio',
   validate: 'Validación de canje',
+  login: 'Pedir acceso al portal',
 };
 
 const ACTORS: Record<string, string> = {
@@ -18,6 +19,7 @@ const SCOPES: Record<string, string> = {
   device: 'por móvil',
   network: 'por red',
   staff: 'del personal',
+  login: 'por correo',
 };
 
 /**

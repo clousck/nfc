@@ -105,9 +105,9 @@ export interface RateLimitIncidentDto {
   businessName: string | null;
   /** Día local YYYY-MM-DD. */
   day: string;
-  action: 'signup' | 'redeem' | 'validate';
+  action: 'signup' | 'redeem' | 'validate' | 'login';
   actor: 'customer' | 'staff' | 'anonymous';
-  scope: 'device' | 'network' | 'staff';
+  scope: 'device' | 'network' | 'staff' | 'login';
   mode: 'observe' | 'enforce';
   /** Minutos distintos en los que se superó el límite. */
   minutes: number;

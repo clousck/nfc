@@ -7,7 +7,7 @@ import {
   sourceFromParam,
   SOURCE_PARAM,
 } from '@nfc/shared';
-import { cleanupLoginTokens } from './accounts/store.js';
+import { cleanupLoginTokens, portalOrigin } from './accounts/store.js';
 import { cleanupAudit } from './audit.js';
 import type { Env } from './env.js';
 import { fallbackResponse as fallback } from './fallback.js';
@@ -16,6 +16,8 @@ import { handleLoyaltyTap, loyaltyRoutes } from './loyalty/routes.js';
 import { colorOfDay } from './loyalty/pages.js';
 import { readCookie, STAFF_COOKIE } from './loyalty/security.js';
 import { localDay, loyaltySummary } from './loyalty/store.js';
+import { portalRoutes } from './portal/routes.js';
+import { cleanupSessions } from './portal/session.js';
 import { cleanupRateLimits } from './rate-limit.js';
 import { loadReport, queryReportStats } from './report.js';
 import { renderReportPage, type ReportLoyalty } from './report-page.js';
@@ -128,8 +130,17 @@ app.onError((err) => {
   return fallback(503);
 });
 
+/** negocios.penginexr.com → portal; cualquier otro host (go.penginexr.com) → chips y API. */
+function isPortalHost(request: Request, env: Env): boolean {
+  return new URL(request.url).host === new URL(portalOrigin(env)).host;
+}
+
 export default {
-  fetch: app.fetch,
+  fetch(request: Request, env: Env, ctx: ExecutionContext) {
+    return isPortalHost(request, env)
+      ? portalRoutes.fetch(request, env, ctx)
+      : app.fetch(request, env, ctx);
+  },
   /** Cron diario (wrangler.toml): incidentes viejos, sales de días pasados y auditoría de >1 año. */
   async scheduled(_controller, env, ctx) {
     const now = Date.now();
@@ -138,6 +149,7 @@ export default {
         cleanupRateLimits(env.DB, now),
         cleanupAudit(env.DB, now),
         cleanupLoginTokens(env.DB, now),
+        cleanupSessions(env.DB, now),
       ]),
     );
   },
