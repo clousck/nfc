@@ -52,7 +52,15 @@ export type WithSync<T> = T & { sync: SyncResult };
 
 export interface ResyncDto {
   ok: true;
+  /** Total de claves escritas en KV. */
   published: number;
+  /** Chips publicados (los libres o sin destino no se publican). */
+  tags: number;
+  /** Registros `business:<id>` (nombre y visitas del premio). */
+  businesses: number;
+  /** Enlaces de estadísticas `report:<token>`. */
+  reports: number;
+  /** Claves sobrantes eliminadas. */
   deleted: number;
 }
 

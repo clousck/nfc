@@ -38,7 +38,7 @@ function Header() {
       const result = await api.resync();
       notify(
         'success',
-        `Sincronizado: ${result.published} chips publicados, ${result.deleted} claves sobrantes eliminadas.`,
+        `Sincronizado: ${result.tags} chips, ${result.businesses} negocios y ${result.reports} enlaces de estadísticas publicados; ${result.deleted} claves sobrantes eliminadas.`,
       );
     } catch (err) {
       reportError(err);

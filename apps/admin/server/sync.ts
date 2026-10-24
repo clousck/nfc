@@ -14,7 +14,11 @@ import { businesses, tags, type Business, type Tag } from './db/schema.js';
 export type { SyncResult };
 
 export interface ResyncResult {
+  /** Total de claves escritas en KV (chips + negocios + enlaces de estadísticas). */
   published: number;
+  tags: number;
+  businesses: number;
+  reports: number;
   deleted: number;
 }
 
@@ -182,22 +186,24 @@ export async function unpublish(store: LinkStore, keys: readonly string[]): Prom
  * que ya no corresponden a ningún chip ni enlace publicable. Lanza si la API falla.
  */
 export async function resyncAll(db: Db, store: LinkStore): Promise<ResyncResult> {
-  const toPut: KvEntry[] = [];
+  const tagEntries: KvEntry[] = [];
   for (const { tag, business } of loadTagsWithBusiness(db)) {
     const record = toLinkRecord(tag, business);
-    if (record) toPut.push({ key: tag.slug, value: record });
+    if (record) tagEntries.push({ key: tag.slug, value: record });
   }
   const allBusinesses = db.select().from(businesses).all();
+  const businessEntries = allBusinesses.map((business) => ({
+    key: businessKey(business.id),
+    value: toBusinessRecord(business),
+  }));
+  const reportEntries: KvEntry[] = [];
   for (const business of allBusinesses) {
-    toPut.push({ key: businessKey(business.id), value: toBusinessRecord(business) });
-  }
-  const withReports = allBusinesses.filter((b) => b.reportToken !== null);
-  for (const business of withReports) {
     const report = toReportRecord(business, tagsOf(db, business.id));
     if (report && business.reportToken) {
-      toPut.push({ key: reportKey(business.reportToken), value: report });
+      reportEntries.push({ key: reportKey(business.reportToken), value: report });
     }
   }
+  const toPut = [...tagEntries, ...businessEntries, ...reportEntries];
   await store.putMany(toPut);
 
   const published = new Set(toPut.map((entry) => entry.key));
@@ -205,5 +211,11 @@ export async function resyncAll(db: Db, store: LinkStore): Promise<ResyncResult>
   if (orphans.length > 0) await store.deleteMany(orphans);
 
   db.update(tags).set({ syncedAt: Date.now() }).run();
-  return { published: toPut.length, deleted: orphans.length };
+  return {
+    published: toPut.length,
+    tags: tagEntries.length,
+    businesses: businessEntries.length,
+    reports: reportEntries.length,
+    deleted: orphans.length,
+  };
 }
