@@ -1,141 +1,80 @@
-import { buildTagUrls, generateSlug } from '@nfc/shared';
-import { and, desc, eq, isNull, sql, type SQL } from 'drizzle-orm';
+import { buildTagUrls } from '@nfc/shared';
 import { Hono } from 'hono';
 import QRCode from 'qrcode';
-import { businesses, tagCounter, tags, type Tag } from '../db/schema.js';
-import type { AppDeps, AppEnv } from '../context.js';
+import type { AppEnv, RouteDeps } from '../context.js';
+import { toTagDto } from '../presenters.js';
 import { getTagScanStats } from '../scans.js';
-import { syncBusinesses, syncTags, toLinkRecord, unpublish } from '../sync.js';
+import type {
+  CreateTagResult,
+  DeleteTagResult,
+  LockTagResult,
+  QrTargetResult,
+  TagWithStatus,
+  UpdateTagResult,
+} from '../services/tag-service.js';
 import { QrQuery, TagCreate, TagListQuery, TagUpdate, validate } from '../validation.js';
+import { errorResponder } from './errors.js';
 
-const MAX_SLUG_ATTEMPTS = 5;
+type TagError = Extract<
+  CreateTagResult | UpdateTagResult | LockTagResult | DeleteTagResult | QrTargetResult,
+  { ok: false }
+>['error'];
 
-function isUniqueViolation(err: unknown): boolean {
-  return (
-    typeof err === 'object' &&
-    err !== null &&
-    'code' in err &&
-    (err as { code: unknown }).code === 'SQLITE_CONSTRAINT_PRIMARYKEY'
-  );
-}
+const fail = errorResponder<TagError>({
+  not_found: { status: 404 },
+  business_not_found: { status: 422 },
+  slug_generation_failed: { status: 500 },
+  already_locked: { status: 409 },
+  locked: {
+    status: 409,
+    message:
+      'El chip físico ya está bloqueado con esta URL. Desactívalo o reasígnalo en lugar de borrarlo.',
+  },
+  loyalty_no_qr: {
+    status: 409,
+    message:
+      'Los chips de fidelidad no tienen QR: con la URL del QR se podrían sumar sellos sin ir al local.',
+  },
+});
 
-export function tagRoutes({ db, linkStore, scanStore, publicBaseUrl }: AppDeps) {
+export function tagRoutes({ tags, scanStore, publicBaseUrl }: RouteDeps) {
   const app = new Hono<AppEnv>();
-
-  const present = (tag: Tag) => ({ ...tag, urls: buildTagUrls(publicBaseUrl, tag.slug) });
-
-  const findTag = (slug: string) => db.select().from(tags).where(eq(tags.slug, slug)).get();
-
-  const businessExists = (id: string) =>
-    db.select({ id: businesses.id }).from(businesses).where(eq(businesses.id, id)).get() !==
-    undefined;
-
-  const isPublished = (tag: Tag) => {
-    const business = tag.businessId
-      ? (db.select().from(businesses).where(eq(businesses.id, tag.businessId)).get() ?? null)
-      : null;
-    return toLinkRecord(tag, business) !== null;
-  };
+  const dto = ({ tag, published }: TagWithStatus) => toTagDto(tag, published, publicBaseUrl);
 
   app.get('/', validate('query', TagListQuery), (c) => {
     const query = c.req.valid('query');
-    const filters: SQL[] = [];
-    if (query.businessId) filters.push(eq(tags.businessId, query.businessId));
-    if (query.unassigned === 'true') filters.push(isNull(tags.businessId));
-    const rows = db
-      .select()
-      .from(tags)
-      .where(and(...filters))
-      .orderBy(desc(tags.number))
-      .all();
-    return c.json(rows.map(present));
+    const rows = tags.list({
+      businessId: query.businessId,
+      unassigned: query.unassigned === 'true',
+    });
+    return c.json(rows.map(dto));
   });
 
   app.post('/', validate('json', TagCreate), async (c) => {
-    const body = c.req.valid('json');
-    if (body.businessId && !businessExists(body.businessId)) {
-      return c.json({ error: 'business_not_found' }, 422);
-    }
-
-    let created: Tag | undefined;
-    for (let attempt = 0; attempt < MAX_SLUG_ATTEMPTS && !created; attempt++) {
-      try {
-        // Número y chip en la misma transacción: si el slug choca, el contador no avanza.
-        created = db.transaction((tx) => {
-          const counter = tx
-            .insert(tagCounter)
-            .values({ id: 1, last: 1 })
-            .onConflictDoUpdate({
-              target: tagCounter.id,
-              set: { last: sql`${tagCounter.last} + 1` },
-            })
-            .returning()
-            .get();
-          return tx
-            .insert(tags)
-            .values({
-              ...body,
-              slug: generateSlug(),
-              number: counter.last,
-              assignedAt: body.businessId ? Date.now() : null,
-              createdAt: Date.now(),
-            })
-            .returning()
-            .get();
-        });
-      } catch (err) {
-        if (!isUniqueViolation(err)) throw err;
-      }
-    }
-    if (!created) return c.json({ error: 'slug_generation_failed' }, 500);
-
-    const sync = await syncTags(db, linkStore, [created.slug]);
-    const tag = findTag(created.slug) ?? created;
-    return c.json({ ...present(tag), published: isPublished(tag), sync }, 201);
+    const result = await tags.create(c.req.valid('json'));
+    if (!result.ok) return fail(c, result.error);
+    return c.json({ ...dto(result), sync: result.sync }, 201);
   });
 
   app.get('/number/:number{[0-9]+}', (c) => {
-    const tag = db
-      .select()
-      .from(tags)
-      .where(eq(tags.number, Number(c.req.param('number'))))
-      .get();
-    if (!tag) return c.json({ error: 'not_found' }, 404);
-    return c.json({ ...present(tag), published: isPublished(tag) });
+    const found = tags.getByNumber(Number(c.req.param('number')));
+    return found ? c.json(dto(found)) : fail(c, 'not_found');
   });
 
   app.get('/:slug', (c) => {
-    const tag = findTag(c.req.param('slug'));
-    if (!tag) return c.json({ error: 'not_found' }, 404);
-    return c.json({ ...present(tag), published: isPublished(tag) });
+    const found = tags.get(c.req.param('slug'));
+    return found ? c.json(dto(found)) : fail(c, 'not_found');
   });
 
   app.patch('/:slug', validate('json', TagUpdate), async (c) => {
-    const slug = c.req.param('slug');
-    const body = c.req.valid('json');
-    const current = findTag(slug);
-    if (!current) return c.json({ error: 'not_found' }, 404);
-    if (body.businessId && !businessExists(body.businessId)) {
-      return c.json({ error: 'business_not_found' }, 422);
-    }
-    // Al cambiar de negocio, las estadísticas empiezan de cero para el nuevo.
-    const reassigned = body.businessId !== undefined && body.businessId !== current.businessId;
-    const changes = reassigned
-      ? { ...body, assignedAt: body.businessId ? Date.now() : null }
-      : body;
-    if (Object.keys(changes).length > 0) {
-      db.update(tags).set(changes).where(eq(tags.slug, slug)).run();
-    }
-    // También se actualiza el enlace de estadísticas del negocio anterior si cambió.
-    const sync = await syncTags(db, linkStore, [slug], [current.businessId]);
-    const tag = findTag(slug);
-    if (!tag) return c.json({ error: 'not_found' }, 404);
-    return c.json({ ...present(tag), published: isPublished(tag), sync });
+    const result = await tags.update(c.req.param('slug'), c.req.valid('json'));
+    if (!result.ok) return fail(c, result.error);
+    return c.json({ ...dto(result), sync: result.sync });
   });
 
   app.get('/:slug/scans', async (c) => {
-    const tag = findTag(c.req.param('slug'));
-    if (!tag) return c.json({ error: 'not_found' }, 404);
+    const found = tags.get(c.req.param('slug'));
+    if (!found) return fail(c, 'not_found');
     if (!scanStore) {
       return c.json(
         {
@@ -146,7 +85,7 @@ export function tagRoutes({ db, linkStore, scanStore, publicBaseUrl }: AppDeps) 
       );
     }
     try {
-      return c.json(await getTagScanStats(scanStore, tag.slug, tag.assignedAt));
+      return c.json(await getTagScanStats(scanStore, found.tag.slug, found.tag.assignedAt));
     } catch (err) {
       return c.json(
         {
@@ -158,63 +97,31 @@ export function tagRoutes({ db, linkStore, scanStore, publicBaseUrl }: AppDeps) 
     }
   });
 
-  /** Marca el chip físico como bloqueado (tras escribirlo y hacer makeReadOnly). */
   app.post('/:slug/lock', (c) => {
-    const slug = c.req.param('slug');
-    const tag = findTag(slug);
-    if (!tag) return c.json({ error: 'not_found' }, 404);
-    if (tag.lockedAt) return c.json({ error: 'already_locked', lockedAt: tag.lockedAt }, 409);
-    const updated = db
-      .update(tags)
-      .set({ lockedAt: Date.now() })
-      .where(eq(tags.slug, slug))
-      .returning()
-      .get();
-    return c.json(present(updated ?? tag));
+    const result = tags.lock(c.req.param('slug'));
+    if (!result.ok) {
+      return result.error === 'already_locked'
+        ? fail(c, result.error, { lockedAt: result.lockedAt })
+        : fail(c, result.error);
+    }
+    return c.json(dto(result));
   });
 
   app.delete('/:slug', async (c) => {
     const slug = c.req.param('slug');
-    const tag = findTag(slug);
-    if (!tag) return c.json({ error: 'not_found' }, 404);
-    if (tag.lockedAt) {
-      return c.json(
-        {
-          error: 'locked',
-          message:
-            'El chip físico ya está bloqueado con esta URL. Desactívalo o reasígnalo en lugar de borrarlo.',
-        },
-        409,
-      );
-    }
-    db.delete(tags).where(eq(tags.slug, slug)).run();
-    const removed = await unpublish(linkStore, [slug]);
-    const sync = tag.businessId
-      ? removed.ok
-        ? await syncBusinesses(db, linkStore, [tag.businessId])
-        : removed
-      : removed;
-    return c.json({ deleted: slug, sync });
+    const result = await tags.delete(slug);
+    if (!result.ok) return fail(c, result.error);
+    return c.json({ deleted: slug, sync: result.sync });
   });
 
   app.get('/:slug/qr', validate('query', QrQuery), async (c) => {
-    const slug = c.req.param('slug');
-    const tag = findTag(slug);
-    if (!tag) return c.json({ error: 'not_found' }, 404);
-    if (tag.type === 'loyalty') {
-      return c.json(
-        {
-          error: 'loyalty_no_qr',
-          message:
-            'Los chips de fidelidad no tienen QR: con la URL del QR se podrían sumar sellos sin ir al local.',
-        },
-        409,
-      );
-    }
+    const result = tags.qrTarget(c.req.param('slug'));
+    if (!result.ok) return fail(c, result.error);
+    const { tag } = result;
     const { format, size, margin, download } = c.req.valid('query');
-    const { qr } = buildTagUrls(publicBaseUrl, slug);
+    const { qr } = buildTagUrls(publicBaseUrl, tag.slug);
     const options = { errorCorrectionLevel: 'M' as const, margin, width: size };
-    const disposition = `${download === '1' ? 'attachment' : 'inline'}; filename="chip-${tag.number}-${slug}-qr.${format}"`;
+    const disposition = `${download === '1' ? 'attachment' : 'inline'}; filename="chip-${tag.number}-${tag.slug}-qr.${format}"`;
 
     if (format === 'png') {
       const png = await QRCode.toBuffer(qr, { ...options, type: 'png' });

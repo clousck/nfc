@@ -1,55 +1,30 @@
-import type { Business, Tag } from '../../server/db/schema';
+// Los tipos salen del contrato de la API, nunca del esquema de la base de datos.
+import type {
+  BusinessDetailDto,
+  BusinessDto,
+  LoyaltyCardDto,
+  LoyaltyDto,
+  ResyncDto,
+  SyncResult,
+  TagDto,
+  TagScanStats,
+  WithSync,
+} from '../../server/contracts';
 
-export type { Business, Tag };
+export type { SyncResult, TagScanStats };
 
-export type SyncResult = { ok: true } | { ok: false; error: string };
-
-export interface TagView extends Tag {
-  urls: { nfc: string; qr: string };
-  published?: boolean;
-  sync?: SyncResult;
-}
-
-export type BusinessView = Business & { reportUrl: string | null };
-
-export type BusinessDetail = BusinessView & { tags: Tag[] };
-
-export interface TagScanStats {
-  since: number | null;
-  total: number;
-  nfc: number;
-  qr: number;
-  ios: number;
-  android: number;
-  other: number;
-  bots: number;
-  lastAt: number | null;
-  recent: Array<{
-    ts: number;
-    source: 'nfc' | 'qr';
-    os: 'ios' | 'android' | 'other' | null;
-    country: string | null;
-    city: string | null;
-  }>;
-}
+export type Business = BusinessDto;
+export type BusinessDetail = BusinessDetailDto;
+export type Tag = TagDto;
+/** Chip tal como lo devuelve la API; tras crear o editar incluye el resultado de publicar. */
+export type TagView = TagDto & { sync?: SyncResult };
+export type LoyaltyCard = LoyaltyCardDto;
 
 export type BusinessInput = Partial<
   Pick<Business, 'name' | 'contactName' | 'phone' | 'plan' | 'status' | 'notes' | 'loyaltyVisits'>
 >;
 
 export type TagInput = Partial<Pick<Tag, 'businessId' | 'label' | 'targetUrl' | 'active' | 'type'>>;
-
-export interface LoyaltyCard {
-  id: number;
-  name: string;
-  phone: string;
-  stamps: number;
-  expired: boolean;
-  lastVisitAt: number | null;
-  marketing: boolean;
-  createdAt: number;
-  redemptions: number;
-}
 
 export class ApiError extends Error {
   constructor(
@@ -121,17 +96,13 @@ export const api = {
   getBusiness: (id: string) => request<BusinessDetail>('GET', `/api/businesses/${id}`),
   createBusiness: (input: BusinessInput) => request<Business>('POST', '/api/businesses', input),
   updateBusiness: (id: string, input: BusinessInput) =>
-    request<Business & { sync: SyncResult }>('PATCH', `/api/businesses/${id}`, input),
+    request<WithSync<Business>>('PATCH', `/api/businesses/${id}`, input),
   deleteBusiness: (id: string) => request<void>('DELETE', `/api/businesses/${id}`),
-  getLoyalty: (id: string) =>
-    request<{ visits: number | null; cards: LoyaltyCard[] }>(
-      'GET',
-      `/api/businesses/${id}/loyalty`,
-    ),
+  getLoyalty: (id: string) => request<LoyaltyDto>('GET', `/api/businesses/${id}/loyalty`),
   deleteLoyaltyCard: (id: string, cardId: number) =>
     request<{ deleted: number }>('DELETE', `/api/businesses/${id}/loyalty/cards/${cardId}`),
   regenerateReport: (id: string) =>
-    request<BusinessView & { sync: SyncResult }>('POST', `/api/businesses/${id}/report-token`),
+    request<WithSync<Business>>('POST', `/api/businesses/${id}/report-token`),
 
   listTags: (filter: { businessId?: string; unassigned?: boolean } = {}) => {
     const query = new URLSearchParams();
@@ -150,7 +121,7 @@ export const api = {
   deleteTag: (slug: string) =>
     request<{ deleted: string; sync: SyncResult }>('DELETE', `/api/tags/${slug}`),
 
-  resync: () => request<{ ok: true; published: number; deleted: number }>('POST', '/api/sync'),
+  resync: () => request<ResyncDto>('POST', '/api/sync'),
 };
 
 export function qrUrl(slug: string, format: 'svg' | 'png', download = false): string {

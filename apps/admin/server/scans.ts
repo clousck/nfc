@@ -1,28 +1,7 @@
-import type { DeviceOs, ScanSource } from '@nfc/shared';
 import type { ScanStore } from './cloudflare.js';
+import type { RecentScanDto, TagScanStats } from './contracts.js';
 
-export interface RecentScan {
-  ts: number;
-  source: ScanSource;
-  os: DeviceOs | null;
-  country: string | null;
-  city: string | null;
-}
-
-export interface TagScanStats {
-  /** Desde cuándo se cuenta (asignación al negocio actual); null = desde siempre. */
-  since: number | null;
-  total: number;
-  nfc: number;
-  qr: number;
-  ios: number;
-  android: number;
-  other: number;
-  /** Visitas de crawlers (vistas previas de WhatsApp, etc.): no cuentan en el total. */
-  bots: number;
-  lastAt: number | null;
-  recent: RecentScan[];
-}
+export type { TagScanStats };
 
 interface SummaryRow {
   total: number | null;
@@ -62,7 +41,7 @@ export async function getTagScanStats(
   const from = since ?? 0;
   const [summaryRows, recent] = await Promise.all([
     store.query<SummaryRow>(SUMMARY_SQL, [slug, from]),
-    store.query<RecentScan>(RECENT_SQL, [slug, from, recentLimit]),
+    store.query<RecentScanDto>(RECENT_SQL, [slug, from, recentLimit]),
   ]);
   const s = summaryRows[0];
   const total = s?.total ?? 0;

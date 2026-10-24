@@ -1,113 +1,61 @@
-import {
-  buildReportUrl,
-  businessKey,
-  generateId,
-  generateReportToken,
-  reportKey,
-} from '@nfc/shared';
-import { asc, count, desc, eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import { businesses, tags, type Business } from '../db/schema.js';
-import type { AppDeps, AppEnv } from '../context.js';
-import { syncBusinesses, unpublish } from '../sync.js';
+import type { BusinessDetailDto } from '../contracts.js';
+import type { AppEnv, RouteDeps } from '../context.js';
+import type { Business } from '../db/schema.js';
+import { toBusinessDto, toTagDto } from '../presenters.js';
+import type { BusinessResult, DeleteBusinessResult } from '../services/business-service.js';
 import { BusinessCreate, BusinessUpdate, validate } from '../validation.js';
+import { errorResponder } from './errors.js';
 
-export function businessRoutes({ db, linkStore, publicBaseUrl }: AppDeps) {
+type BusinessError = Extract<BusinessResult | DeleteBusinessResult, { ok: false }>['error'];
+
+const fail = errorResponder<BusinessError>({
+  not_found: { status: 404 },
+  has_tags: {
+    status: 409,
+    message: 'El negocio tiene chips asignados. Libéralos o marca el negocio como cancelado.',
+  },
+});
+
+export function businessRoutes({ businesses, publicBaseUrl }: RouteDeps) {
   const app = new Hono<AppEnv>();
+  const dto = (business: Business) => toBusinessDto(business, publicBaseUrl);
 
-  const present = (business: Business) => ({
-    ...business,
-    reportUrl: business.reportToken ? buildReportUrl(publicBaseUrl, business.reportToken) : null,
-  });
-
-  const findBusiness = (id: string) =>
-    db.select().from(businesses).where(eq(businesses.id, id)).get();
-
-  app.get('/', (c) => {
-    const rows = db.select().from(businesses).orderBy(desc(businesses.createdAt)).all();
-    return c.json(rows.map(present));
-  });
+  app.get('/', (c) => c.json(businesses.list().map(dto)));
 
   app.post('/', validate('json', BusinessCreate), async (c) => {
-    const body = c.req.valid('json');
-    const row = db
-      .insert(businesses)
-      .values({
-        ...body,
-        id: generateId('b'),
-        reportToken: generateReportToken(),
-        createdAt: Date.now(),
-      })
-      .returning()
-      .get();
-    // Publica el enlace de estadísticas para que funcione desde el primer momento.
-    const sync = await syncBusinesses(db, linkStore, [row.id]);
-    return c.json({ ...present(row), sync }, 201);
+    const { business, sync } = await businesses.create(c.req.valid('json'));
+    return c.json({ ...dto(business), sync }, 201);
   });
 
   app.get('/:id', (c) => {
-    const row = findBusiness(c.req.param('id'));
-    if (!row) return c.json({ error: 'not_found' }, 404);
-    const businessTags = db
-      .select()
-      .from(tags)
-      .where(eq(tags.businessId, row.id))
-      .orderBy(asc(tags.number))
-      .all();
-    return c.json({ ...present(row), tags: businessTags });
+    const found = businesses.get(c.req.param('id'));
+    if (!found) return fail(c, 'not_found');
+    const body: BusinessDetailDto = {
+      ...dto(found.business),
+      tags: found.tags.map(({ tag, published }) => toTagDto(tag, published, publicBaseUrl)),
+    };
+    return c.json(body);
   });
 
   app.patch('/:id', validate('json', BusinessUpdate), async (c) => {
-    const id = c.req.param('id');
-    const body = c.req.valid('json');
-    const row =
-      Object.keys(body).length > 0
-        ? db.update(businesses).set(body).where(eq(businesses.id, id)).returning().get()
-        : findBusiness(id);
-    if (!row) return c.json({ error: 'not_found' }, 404);
-    // El estado y el nombre afectan a sus chips y a su enlace de estadísticas.
-    const sync = await syncBusinesses(db, linkStore, [id]);
-    return c.json({ ...present(row), sync });
+    const result = await businesses.update(c.req.param('id'), c.req.valid('json'));
+    if (!result.ok) return fail(c, result.error);
+    return c.json({ ...dto(result.business), sync: result.sync });
   });
 
-  /** Crea o regenera el enlace privado de estadísticas; el anterior deja de funcionar. */
   app.post('/:id/report-token', async (c) => {
-    const id = c.req.param('id');
-    const current = findBusiness(id);
-    if (!current) return c.json({ error: 'not_found' }, 404);
-    const row = db
-      .update(businesses)
-      .set({ reportToken: generateReportToken() })
-      .where(eq(businesses.id, id))
-      .returning()
-      .get();
-    if (!row) return c.json({ error: 'not_found' }, 404);
-    const removed = current.reportToken
-      ? await unpublish(linkStore, [reportKey(current.reportToken)])
-      : ({ ok: true } as const);
-    const published = await syncBusinesses(db, linkStore, [id]);
-    const sync = removed.ok ? published : removed;
-    return c.json({ ...present(row), sync });
+    const result = await businesses.regenerateReportToken(c.req.param('id'));
+    if (!result.ok) return fail(c, result.error);
+    return c.json({ ...dto(result.business), sync: result.sync });
   });
 
   app.delete('/:id', async (c) => {
-    const id = c.req.param('id');
-    const [assigned] = db.select({ n: count() }).from(tags).where(eq(tags.businessId, id)).all();
-    if (assigned && assigned.n > 0) {
-      return c.json(
-        {
-          error: 'has_tags',
-          message: 'El negocio tiene chips asignados. Libéralos o marca el negocio como cancelado.',
-        },
-        409,
-      );
+    const result = await businesses.delete(c.req.param('id'));
+    if (!result.ok) return fail(c, result.error);
+    if (!result.sync.ok) {
+      console.error('No se pudo retirar el negocio de Cloudflare', result.sync.error);
     }
-    const deleted = db.delete(businesses).where(eq(businesses.id, id)).returning().get();
-    if (!deleted) return c.json({ error: 'not_found' }, 404);
-    const keys = [businessKey(deleted.id)];
-    if (deleted.reportToken) keys.push(reportKey(deleted.reportToken));
-    const sync = await unpublish(linkStore, keys);
-    if (!sync.ok) console.error('No se pudo retirar el negocio de Cloudflare', sync.error);
     return c.body(null, 204);
   });
 

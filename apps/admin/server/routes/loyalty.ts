@@ -1,8 +1,7 @@
 import { LOYALTY_EXPIRY_DAYS } from '@nfc/shared';
-import { eq } from 'drizzle-orm';
 import { Hono } from 'hono';
-import type { AppDeps, AppEnv } from '../context.js';
-import { businesses } from '../db/schema.js';
+import type { LoyaltyCardDto, LoyaltyDto } from '../contracts.js';
+import type { AppEnv, RouteDeps } from '../context.js';
 
 const EXPIRY_MS = LOYALTY_EXPIRY_DAYS * 86_400_000;
 
@@ -32,7 +31,7 @@ function csvField(value: string): string {
 }
 
 /** Tarjetas de fidelidad de un negocio (datos en D1, escritos por el Worker). */
-export function loyaltyRoutes({ db, scanStore }: AppDeps) {
+export function loyaltyRoutes({ businesses, scanStore }: RouteDeps) {
   const app = new Hono<AppEnv>();
 
   app.use('*', async (c, next) => {
@@ -45,8 +44,7 @@ export function loyaltyRoutes({ db, scanStore }: AppDeps) {
     await next();
   });
 
-  const businessOr404 = (id: string) =>
-    db.select().from(businesses).where(eq(businesses.id, id)).get();
+  const businessOr404 = (id: string) => businesses.find(id);
 
   app.get('/:id/loyalty', async (c) => {
     const business = businessOr404(c.req.param('id'));
@@ -61,9 +59,9 @@ export function loyaltyRoutes({ db, scanStore }: AppDeps) {
         [business.id],
       );
       const now = Date.now();
-      return c.json({
+      const body: LoyaltyDto = {
         visits: business.loyaltyVisits,
-        cards: rows.map((r) => {
+        cards: rows.map((r): LoyaltyCardDto => {
           const expired = r.last_stamp_at !== null && now - r.last_stamp_at > EXPIRY_MS;
           return {
             id: r.id,
@@ -77,7 +75,8 @@ export function loyaltyRoutes({ db, scanStore }: AppDeps) {
             redemptions: Number(r.redemptions),
           };
         }),
-      });
+      };
+      return c.json(body);
     } catch (err) {
       return c.json({ error: 'd1_failed', message: d1Error(err) }, 502);
     }

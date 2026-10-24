@@ -7,10 +7,11 @@ import {
   type ReportRecord,
 } from '@nfc/shared';
 import type { KvEntry, LinkStore } from './cloudflare.js';
+import type { SyncResult } from './contracts.js';
 import type { Db } from './db/client.js';
 import { businesses, tags, type Business, type Tag } from './db/schema.js';
 
-export type SyncResult = { ok: true } | { ok: false; error: string };
+export type { SyncResult };
 
 export interface ResyncResult {
   published: number;

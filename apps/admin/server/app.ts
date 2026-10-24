@@ -7,6 +7,7 @@ import type { AppDeps, AppEnv } from './context.js';
 import { businessRoutes } from './routes/businesses.js';
 import { loyaltyRoutes } from './routes/loyalty.js';
 import { tagRoutes } from './routes/tags.js';
+import { createServices } from './services/index.js';
 import { resyncAll } from './sync.js';
 
 export interface CreateAppOptions extends AppDeps {
@@ -27,9 +28,14 @@ export function createApp(options: CreateAppOptions) {
 
   if (auth) app.use('/api/*', auth);
 
-  app.route('/api/businesses', businessRoutes(deps));
-  app.route('/api/businesses', loyaltyRoutes(deps));
-  app.route('/api/tags', tagRoutes(deps));
+  const routeDeps = {
+    ...createServices(deps),
+    scanStore: deps.scanStore,
+    publicBaseUrl: deps.publicBaseUrl,
+  };
+  app.route('/api/businesses', businessRoutes(routeDeps));
+  app.route('/api/businesses', loyaltyRoutes(routeDeps));
+  app.route('/api/tags', tagRoutes(routeDeps));
 
   app.post('/api/sync', async (c) => {
     try {
