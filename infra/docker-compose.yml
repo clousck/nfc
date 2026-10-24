@@ -1,6 +1,10 @@
 # Stack de Dockge para el panel admin en la Raspberry Pi.
 #
-# 1. Construir la imagen en la Pi (desde la raíz del repo):
+# 1. Imagen: la construye GitHub Actions en cada push a main y la publica en
+#      ghcr.io/clousck/nfc-admin:latest   (y :sha-<commit> para volver a una versión anterior)
+#    Para actualizar: botón "Update" del stack en Dockge (descarga la imagen y reinicia).
+#    Alternativa sin GitHub: construirla en la Pi desde la raíz del repo y poner
+#    NFC_ADMIN_IMAGE=nfc-admin:latest en el .env:
 #      docker build -f apps/admin/Dockerfile -t nfc-admin:latest .
 # 2. Crear el stack en Dockge pegando este archivo y un .env basado en .env.example.
 # 3. Crear el directorio de datos con dueño uid 1000 (usuario `node` del contenedor):
@@ -15,7 +19,7 @@ name: nfc-admin
 
 services:
   admin:
-    image: nfc-admin:latest
+    image: ${NFC_ADMIN_IMAGE:-ghcr.io/clousck/nfc-admin:latest}
     platform: linux/arm64
     container_name: nfc-admin
     restart: unless-stopped

@@ -1,0 +1,111 @@
+# CI/CD del monorepo.
+#
+#   check         → en cada push y PR: typecheck, lint, formato y tests.
+#   deploy-edge   → solo en main y si check pasó: migraciones D1 + `wrangler deploy`.
+#                   Necesita los secretos CLOUDFLARE_API_TOKEN y CLOUDFLARE_ACCOUNT_ID;
+#                   sin ellos se omite con un aviso (el resto sigue en verde).
+#   build-admin   → solo en main y si check pasó: imagen linux/arm64 del panel en
+#                   ghcr.io/<dueño>/nfc-admin (:latest y :sha-<commit>). La Pi la descarga
+#                   con "Update" en Dockge; nunca se actualiza sola.
+
+name: CI/CD
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm typecheck
+      - run: pnpm lint
+      - run: pnpm format:check
+      - run: pnpm test
+
+  # Los secretos no se pueden usar en el `if` de un job: este paso previo los comprueba.
+  edge-secrets:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    runs-on: ubuntu-latest
+    outputs:
+      ready: ${{ steps.check.outputs.ready }}
+    steps:
+      - id: check
+        env:
+          READY: ${{ secrets.CLOUDFLARE_API_TOKEN != '' && secrets.CLOUDFLARE_ACCOUNT_ID != '' }}
+        run: |
+          echo "ready=$READY" >> "$GITHUB_OUTPUT"
+          if [ "$READY" != "true" ]; then
+            echo "::warning::Faltan CLOUDFLARE_API_TOKEN o CLOUDFLARE_ACCOUNT_ID; no se despliega el Worker."
+          fi
+
+  deploy-edge:
+    needs: [check, edge-secrets]
+    if: needs.edge-secrets.outputs.ready == 'true'
+    runs-on: ubuntu-latest
+    # Nunca dos despliegues a la vez; el más nuevo espera al anterior.
+    concurrency:
+      group: deploy-edge
+      cancel-in-progress: false
+    env:
+      CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+      CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile --filter edge...
+      # Primero la base y luego el código: las migraciones deben ser compatibles con el
+      # Worker que sigue en producción hasta que termine el deploy (expand/contract).
+      - name: Migraciones D1
+        run: pnpm --filter edge exec wrangler d1 migrations apply nfc-scans --remote
+      - name: Desplegar Worker
+        run: pnpm --filter edge exec wrangler deploy
+
+  build-admin:
+    needs: check
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    # Runner ARM nativo (gratis en repos públicos): compila better-sqlite3 sin emulación.
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v4
+      - uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - id: meta
+        uses: docker/metadata-action@v6
+        with:
+          images: ghcr.io/${{ github.repository_owner }}/nfc-admin
+          tags: |
+            type=raw,value=latest
+            type=sha,prefix=sha-
+      - uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: apps/admin/Dockerfile
+          platforms: linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max

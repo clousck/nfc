@@ -1,6 +1,9 @@
 # Plataforma NFC para negocios — Arquitectura
 
 > Nombre provisional del repo: `nfc`. Reemplazar cuando haya nombre definitivo.
+>
+> Relacionados: [BUSINESS-ACCOUNTS.md](BUSINESS-ACCOUNTS.md) (cuentas de negocio, planos de
+> control y de datos, prueba de presencia) · [SECURITY.md](SECURITY.md) · [LOYALTY.md](LOYALTY.md).
 
 ## 1. Objetivo
 
@@ -247,8 +250,11 @@ nfc-platform/
 
 ## 10. Despliegue
 
-- **Edge**: `pnpm --filter edge deploy` (`wrangler deploy`). Más adelante, GitHub Actions al hacer push a `main`.
-- **Admin**: build de imagen `linux/arm64` (en la Pi o vía GitHub Actions → GHCR), actualizar el stack en Dockge.
+Automático con GitHub Actions (`.github/workflows/ci.yml`): en cada push a `main`, si pasan
+typecheck, lint, formato y tests:
+
+- **Edge**: migraciones D1 + `wrangler deploy` (requiere los secretos `CLOUDFLARE_API_TOKEN` y `CLOUDFLARE_ACCOUNT_ID` en GitHub). Manual: `pnpm --filter edge deploy`.
+- **Admin**: imagen `linux/arm64` en `ghcr.io/clousck/nfc-admin` (`:latest` y `:sha-<commit>`); en la Pi, botón "Update" del stack en Dockge. Volver atrás: `NFC_ADMIN_IMAGE=ghcr.io/clousck/nfc-admin:sha-<commit>` en el `.env`.
 - **Migraciones**: D1 con `wrangler d1 migrations apply`; SQLite con Drizzle al arrancar el contenedor.
 
 ## 11. Pendientes por decidir
