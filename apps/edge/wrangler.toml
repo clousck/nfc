@@ -2,8 +2,13 @@ name = "nfc-edge"
 main = "src/index.ts"
 compatibility_date = "2026-10-01"
 
-# Dominio público: Cloudflare crea el registro DNS de go.penginexr.com al desplegar.
-routes = [{ pattern = "go.penginexr.com", custom_domain = true }]
+# Dominios del Worker: Cloudflare crea sus registros DNS y certificados al desplegar.
+#   go.penginexr.com       → chips, páginas del cliente y /internal/* (la Pi)
+#   negocios.penginexr.com → portal de los negocios (solo eso; /internal no responde ahí)
+routes = [
+  { pattern = "go.penginexr.com", custom_domain = true },
+  { pattern = "negocios.penginexr.com", custom_domain = true },
+]
 
 [vars]
 # Ecuador no tiene horario de verano: UTC-5 fijo.

@@ -2,7 +2,9 @@
 
 > Estado: **primera etapa desplegada** (2026-10-21). Las decisiones «sin login para negocios» y
 > «sin QR en fidelidad» quedan **sustituidas** por [BUSINESS-ACCOUNTS.md](BUSINESS-ACCOUNTS.md)
-> (cuentas de negocio y QR rotativo como prueba de presencia).
+> (cuentas de negocio y QR rotativo como prueba de presencia). Desde la fase 4 (2026-10-24) los
+> canjes se validan con **móviles del personal vinculados** desde el portal, y el enlace de
+> estadísticas ya no valida (sección 5).
 
 ## 1. Objetivo y decisiones
 
@@ -18,8 +20,8 @@ mínimo de pasos para el cliente final y **sin logins para nadie más que tú**.
 | Caducidad                          | **90 días sin visitas** → la tarjeta vuelve a 0 sellos                                                                                                                          |
 | Qué da sello                       | **Solo el chip NFC.** Los chips de fidelidad **no tienen QR**                                                                                                                   |
 | Tarjetas                           | **Una por negocio.** Un cliente puede tener tarjeta en varios negocios                                                                                                          |
-| Premio                             | **Uno** por negocio. El negocio lo muestra **físicamente** (cartel/stand); el sistema solo guarda **cuántas visitas** hacen falta, configurado **por ti** en tu panel           |
-| Login para negocios                | **Ninguno** por ahora                                                                                                                                                           |
+| Premio                             | **Uno** por negocio. El negocio lo muestra **físicamente** (cartel/stand); el sistema solo guarda **cuántas visitas** hacen falta: lo activas tú; el dueño ajusta las visitas   |
+| Login para negocios                | ~~Ninguno~~ → **portal** con enlace mágico (fase 4, [BUSINESS-ACCOUNTS.md](BUSINESS-ACCOUNTS.md))                                                                               |
 | Canje                              | El cliente **muestra su pantalla**, con canje de un solo uso (sección 5)                                                                                                        |
 
 ## 2. Tipos de chip
@@ -89,19 +91,25 @@ cada acercamiento.
 3. La pantalla del cliente muestra:
    - un **QR único** del canje,
    - la **hora actual con segundos** avanzando y un pulso animado,
-   - el **color del día** (cambia cada día; el personal lo ve en su enlace de estadísticas),
+   - el **color del día** (cambia cada día; el personal lo ve en su móvil vinculado),
    - el código escrito.
 4. **Sin validar** (lo mínimo): el cajero mira la pantalla y entrega el premio.
 5. **Validación opcional** (para estar seguros):
-   - Una vez, el personal abre el **enlace de estadísticas** del negocio en el móvil del local y
-     pulsa **«Usar este móvil para validar canjes»**.
+   - Una vez, el dueño **vincula el móvil del local** desde el portal ("Personal"): genera un QR
+     o enlace de un solo uso (15 min), el personal lo abre en ese móvil y pulsa **Vincular**.
+     Cada móvil se revoca por separado (detalle en
+     [BUSINESS-ACCOUNTS.md §4](BUSINESS-ACCOUNTS.md#personal-vinculación-por-dispositivo)).
    - En cada canje, escanea el QR del cliente con la **cámara normal** del móvil: se abre
-     _"✓ Canje válido · María · 6 visitas"_ o _"Este canje ya se usó"_ en rojo.
-   - Si el QR no se puede escanear, el código se teclea en el mismo enlace.
+     _"✓ Canje válido · María · 6 visitas"_ o _"Este canje ya se usó"_ en rojo. Queda registrado
+     qué móvil lo validó.
+   - Si el QR no se puede escanear, el código se teclea en `go.penginexr.com/v` desde el móvil
+     vinculado.
+   - ~~Activar la validación desde el enlace de estadísticas~~: retirado en la fase 4. Ese enlace
+     solo muestra cifras.
    - La pantalla del cliente cambia sola a **"✓ Premio entregado"** cuando el local valida.
 
 Una captura de pantalla no sirve: el reloj no avanza y, si el local valida, un código ya usado
-sale en rojo. Solo el móvil activado del negocio puede validar sus canjes; el cliente que
+sale en rojo. Solo un móvil vinculado del negocio puede validar sus canjes; el cliente que
 escanea su propio QR solo ve un aviso.
 
 ## 5b. La tarjeta de sellos (marketing)
@@ -125,8 +133,8 @@ Orgánica de Protección de Datos Personales de Ecuador (LOPDP)**:
 - **Mínimo de datos**: nombre y teléfono; nada más.
 - El **enlace de estadísticas** sin contraseña mostrará solo cifras (tarjetas activas, premios
   canjeados), **nunca nombres ni teléfonos**.
-- Los contactos de quienes aceptaron promociones los exportas **tú** desde tu panel y se los
-  entregas al negocio.
+- Los contactos de quienes aceptaron promociones los exportas **tú** desde tu panel o el
+  **dueño** desde su portal (`contactos.csv`); cada descarga del dueño queda en la auditoría.
 - Acuerdo simple con cada negocio: el negocio es el **responsable** de los datos de sus clientes
   y la plataforma es la **encargada** de tratarlos.
 
@@ -143,12 +151,13 @@ invitación a reseñar debe mostrarse a todos por igual.
 
 Todo lo que ve el cliente vive en **Cloudflare**; la Pi sigue siendo tu panel.
 
-| Pieza                                                   | Dónde                                            |
-| ------------------------------------------------------- | ------------------------------------------------ |
-| Páginas de tarjeta, alta, canje y baja                  | **Worker** (`go.penginexr.com`)                  |
-| Modo de cada chip y visitas necesarias del negocio      | SQLite en la Pi → publicado en **KV** (como hoy) |
-| Clientes, tarjetas, sellos y canjes                     | **D1**, escrito por el Worker                    |
-| Consultar tarjetas, exportar contactos, borrar a pedido | Tu panel en la Pi, vía API de D1                 |
+| Pieza                                                   | Dónde                                           |
+| ------------------------------------------------------- | ----------------------------------------------- |
+| Páginas de tarjeta, alta, canje y baja                  | **Worker** (`go.penginexr.com`)                 |
+| Modo de cada chip                                       | SQLite en la Pi → Worker → **KV**               |
+| Visitas necesarias del negocio                          | **D1** (dueño o admin; desde la fase 4)         |
+| Clientes, tarjetas, sellos y canjes                     | **D1**, escrito por el Worker                   |
+| Consultar tarjetas, exportar contactos, borrar a pedido | Tu panel en la Pi, vía `/internal/*` del Worker |
 
 Tablas nuevas en D1 (esbozo):
 
@@ -158,12 +167,13 @@ Tablas nuevas en D1 (esbozo):
 - `stamps` (tarjeta, chip, fecha),
 - `redemptions` (tarjeta, código, fecha).
 
-Para borrar tarjetas desde tu panel, la llave de la API necesitará el permiso **D1: Edit** (hoy
-tiene **Read**).
+Desde la fase 2 el panel ya no usa la API de Cloudflare: lee y borra a través de la API interna
+del Worker ([BUSINESS-ACCOUNTS.md §3](BUSINESS-ACCOUNTS.md#3-plano-de-control-y-plano-de-datos)).
+Fase 4: `loyalty_redemptions.validated_by_device` guarda qué móvil validó cada canje.
 
 ## 8. Fases
 
 | Fase             | Contenido                                                                                                                                                                                                                                                                                                    |
 | ---------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **F1 — Tarjeta** | Modo fidelidad por chip (sin QR); visitas necesarias por negocio en tu panel; alta con nombre, teléfono y consentimientos; 1 sello/día; caducidad de 90 días; canje con pantalla viva; baja del cliente; en tu panel: tarjetas, exportar contactos con permiso y borrar; cifras en el enlace de estadísticas |
-| **F2 — Extras**  | Modo encuesta, avisos por WhatsApp ("te falta 1 visita"), Google/Apple Wallet, NTAG 424 DNA, portal para negocios si algún día hace falta                                                                                                                                                                    |
+| **F2 — Extras**  | Modo encuesta, avisos por WhatsApp ("te falta 1 visita"), Google/Apple Wallet, NTAG 424 DNA (el portal para negocios ya existe: fase 4)                                                                                                                                                                      |

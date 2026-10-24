@@ -1,6 +1,7 @@
 # Cuentas de negocio, prueba de presencia y nueva división de responsabilidades — diseño
 
-> Estado: **diseño aprobado** (2026-10-24). Sustituye dos decisiones de [LOYALTY.md](LOYALTY.md):
+> Estado: **fases 0–4 desplegadas** (2026-10-24): cuentas, portal en `negocios.penginexr.com` y
+> móviles del personal. Siguiente: fase 5 (QR rotativo). Sustituye dos decisiones de [LOYALTY.md](LOYALTY.md):
 > ahora **sí hay login para negocios**, y la fidelidad **acepta QR**, pero solo el QR rotativo
 > (sección 6). Seguridad: [SECURITY.md](SECURITY.md).
 
@@ -68,6 +69,14 @@ todo" desde la Pi podría pisar el cambio que un negocio acaba de hacer. Con un 
 3. "Re-sincronizar todo" pasa a ser: la Pi envía una foto completa de su inventario y el Worker
    reconstruye KV.
 
+**Semilla (fase 4):** la Pi sigue enviando destino, etiqueta y visitas del premio en la foto de
+inventario, pero solo como **semilla**: el Worker los copia cuando un chip se asigna a un negocio
+(o el negocio aparece) y a partir de ahí manda D1. Si el chip se reasigna, sus ajustes se
+descartan y se vuelven a sembrar: el destino de un negocio nunca pasa al siguiente. Cuando el
+admin edita esos campos desde el panel, la Pi llama directamente a `/internal/*/settings` (sin
+cola: si el Worker no responde, el panel rechaza el cambio con 503) y refresca su copia local
+cada 30 s con `GET /internal/settings`.
+
 **Por qué se mantiene KV si D1 ya tiene todo:** KV está replicado en todos los centros de datos y
 se lee en pocos milisegundos; D1 vive en una región. La redirección lee KV; D1 queda para
 escrituras y consultas.
@@ -76,8 +85,9 @@ escrituras y consultas.
 | ------------------------------------------------- | ----------- | --------------------------------- |
 | Negocio: nombre, plan, estado, contacto, notas    | SQLite (Pi) | Admin                             |
 | Chip: número, asignación, tipo, bloqueo, activo   | SQLite (Pi) | Admin                             |
-| Chip: destino, etiqueta                           | D1          | Dueño o admin (vía API interna)   |
+| Chip: destino, etiqueta, pausa ("stand perdido")  | D1          | Dueño o admin (vía API interna)   |
 | Negocio: visitas del premio, métodos de presencia | D1          | Dueño (dentro de límites) o admin |
+| Ajustes globales (a quién avisar)                 | D1          | Admin                             |
 | Cuentas, sesiones, personal, auditoría            | D1          | Worker                            |
 | Fidelidad, escaneos, incidentes                   | D1          | Worker                            |
 
@@ -101,19 +111,54 @@ escrituras y consultas.
 
 ### Dueño: enlace mágico
 
-1. Tú creas la cuenta (correo + negocio) desde el panel admin.
-2. El dueño escribe su correo en el portal → recibe un enlace de un solo uso que caduca en 15 min.
-3. Al abrirlo se crea una **sesión**: cookie `HttpOnly`, `Secure`, `SameSite=Lax`, de 30 días,
-   revocable. En D1 solo se guarda el hash.
+1. Tú creas la cuenta (correo + negocio) desde el panel admin ("Acceso del dueño al portal"). Una
+   cuenta puede ser dueña de varios negocios.
+2. El dueño escribe su correo en `negocios.penginexr.com` → recibe por correo (Resend, desde
+   `acceso@penginexr.com`) un enlace de un solo uso que caduca en **15 min**.
+   - El portal responde **lo mismo** tenga o no acceso ese correo, y el envío va en
+     `waitUntil`, para que tampoco el tiempo de respuesta lo delate.
+   - Límites: 5/min por correo (`RL_LOGIN`), el límite por IP y como mucho **3 enlaces
+     pendientes** por cuenta (protege la cuota gratuita de Resend).
+3. Abrir el enlace (`GET /entrar/<token>`) solo muestra un botón **Entrar**; el token se consume
+   al pulsarlo (`POST`, `UPDATE … RETURNING` atómico). Así los antivirus de correo que abren los
+   enlaces no gastan el token.
+4. Se crea una **sesión**: cookie `__Host-nfc_session`, `HttpOnly`, `Secure`, `SameSite=Lax`, de
+   30 días. En D1 solo se guarda el hash. "Salir" la revoca en el servidor, y quitar el acceso
+   desde el panel corta las sesiones abiertas.
+5. **Plan B sin correo:** el panel genera un **enlace de invitación** (un solo uso, 24 h) para
+   copiarlo o enviarlo por WhatsApp.
+
+### Portal del dueño
+
+Dentro de la sesión, un dueño solo llega a **sus** negocios; cualquier otro responde como una
+página inexistente. Funciona sin JavaScript (las confirmaciones usan `<details>`).
+
+| Ruta                    | Qué hace                                                                     |
+| ----------------------- | ---------------------------------------------------------------------------- |
+| `/n/<id>`               | Chips y estado; etiqueta y destino (solo `https`); visitas del premio (3–20) |
+|                         | "Stand perdido o dañado": pausa el chip y te avisa por correo (una vez)      |
+| `/n/<id>/estadisticas`  | Las mismas cifras que `/r/<token>`, detrás de la sesión                      |
+| `/n/<id>/contactos.csv` | Solo contactos con permiso de promociones; cada descarga va a la auditoría   |
+| `/n/<id>/actividad`     | La auditoría en palabras: quién, qué, antes → después                        |
+| `/n/<id>/personal`      | Vincular y revocar los móviles del personal                                  |
+
+Un chip de redirección no puede quedarse sin destino. Activar o desactivar la fidelidad sigue
+siendo del admin (es comercial); el dueño solo ajusta las visitas si ya está activa.
 
 ### Personal: vinculación por dispositivo
 
-1. El dueño pulsa **"Vincular dispositivo"** y le pone un nombre ("Caja – María").
-2. Se muestra un QR o enlace de un solo uso (15 min). El personal lo abre en su móvil.
-3. Ese móvil recibe una cookie de dispositivo. Cada validación de canje registra **qué
-   dispositivo** la hizo. El dueño puede revocar cada dispositivo por separado.
-4. El enlace de estadísticas `/r/<token>` **deja de servir para validar**: queda solo para ver
-   cifras y compartirlas.
+1. El dueño (portal, "Personal") o el admin (panel, "Móviles del personal") pulsa **"Vincular
+   dispositivo"** y le pone un nombre ("Caja – María").
+2. Se muestra un QR o enlace de un solo uso (15 min): `go.penginexr.com/vincular/<token>`. El
+   personal lo abre en su móvil; igual que en el login, `GET` solo muestra un botón y `POST`
+   vincula.
+3. Ese móvil recibe la cookie `__Host-nfc_staff` (en D1 solo su hash). Como mucho **10 móviles
+   activos** por negocio. Cada validación de canje registra **qué dispositivo** la hizo
+   (`validated_by_device`), y cada uno se revoca por separado.
+4. `/v/<código>` exige un móvil vinculado **del mismo negocio**. Vincular y revocar quedan en la
+   auditoría.
+5. El enlace de estadísticas `/r/<token>` **ya no sirve para validar**: solo muestra cifras
+   (tarjetas, sellos, canjes) y remite al portal.
 
 ## 5. Qué puede configurar el negocio, y por qué asignar chips es solo del admin
 
@@ -257,8 +302,20 @@ ALTER TABLE loyalty_stamps ADD COLUMN presence_method TEXT;
 ALTER TABLE loyalty_redemptions ADD COLUMN validated_by_device TEXT;
 ```
 
-Más `rate_limit_incidents` ([SECURITY.md §4](SECURITY.md#4-rate-limiting-planeado)). El esquema
-final se ajusta al implementar cada fase.
+Más `rate_limit_incidents` ([SECURITY.md §4](SECURITY.md#4-rate-limiting-hecho-en-modo-observación)).
+
+**Implementado en la fase 4** (`infra/d1/migrations/0005_business_accounts.sql`), con estas
+diferencias respecto al esbozo:
+
+- `tag_settings` lleva `business_id` (para descartar ajustes al reasignar) y `paused_at`.
+- `business_settings` solo tiene `loyalty_visits` (`NULL` = fidelidad desactivada);
+  `qr_key_version` llega con la fase 5.
+- `login_tokens.purpose`: `email` (15 min) o `invite` (24 h, copiado desde el panel).
+- `accounts.last_login_at`; `created_by` es `NULL` cuando lo hizo el admin.
+- Nueva `app_settings` (clave → valor) para ajustes globales del admin.
+- `chip_counters` y `loyalty_stamps.presence_method` llegan con las fases 5–6.
+
+El cron diario borra la auditoría de más de un año y los tokens caducados.
 
 ## 8. Fases
 
@@ -270,7 +327,7 @@ Cada fase se entrega en commits separados, con los tests pasando y sin desplegar
 | 1 ✅ | Capa de servicios + DTOs en el admin. CI (checks). CD: deploy del Worker e imagen arm64 en GHCR                                                 | 1, 5           |
 | 2 ✅ | Worker dueño de D1 y único escritor de KV: API interna, tablas de copia, cola de la Pi → API interna, `db.batch`, la Pi sin token de Cloudflare | 2, 3           |
 | 3 ✅ | Rate limiting en modo observación + registro de incidentes + vista en el panel                                                                  | 4a             |
-| 4    | Cuentas: enlace mágico, portal, permisos, auditoría, dispositivos del personal (límite 3×), fin de la validación con el enlace de estadísticas  | 4b             |
+| 4 ✅ | Cuentas: enlace mágico, portal, permisos, auditoría, dispositivos del personal (límite 3×), fin de la validación con el enlace de estadísticas  | 4b             |
 | 5    | Módulo de presencia: `static_nfc` (actual) + `rotating_qr`; la fidelidad acepta el QR rotativo                                                  | —              |
 | 6    | `ntag_sun` cuando haya chips NTAG 424/413 DNA; `nfc_counter` opcional                                                                           | —              |
 | 7    | Revisar incidentes y pasar el rate limiting a `enforce`                                                                                         | 4a             |
@@ -282,13 +339,18 @@ sin cambiar el código.
 
 ## 9. Decisiones adicionales (2026-10-24)
 
-- **Portal:** `negocios.penginexr.com`, en el mismo Worker, con cookies separadas de las del
-  cliente. Se crea en Cloudflare en la fase 4, avisando antes.
+- **Portal:** `negocios.penginexr.com`, en el mismo Worker (se elige por `Host`; ahí no responde
+  `/internal`), con cookies separadas de las del cliente. Dominio propio del Worker
+  (`custom_domain`) desde la fase 4.
 - **Stand perdido o dañado:** el dueño puede marcarlo. El chip queda **pausado** (no liberado), se
-  registra en la auditoría y te llega un aviso para visitar el local o reponer el stand.
-- **Correo:** recibir en el dominio con Cloudflare Email Routing (gratis, reenvía a Gmail). Para
-  **enviar** los enlaces mágicos hay dos caminos: Cloudflare Email Service (beta, requiere Workers
-  Paid) o un proveedor externo con el dominio verificado. Se decide en la fase 4.
+  registra en la auditoría y te llega un aviso para visitar el local o reponer el stand. El correo
+  que lo recibe se cambia en **Ajustes** del panel (por defecto, `ADMIN_NOTIFY_EMAIL`). Lo
+  reactivan el dueño o el admin.
+- **Correo:** recibir en el dominio con Cloudflare Email Routing (gratis, reenvía a Gmail).
+  **Enviar:** **Resend** (plan gratuito) con `penginexr.com` verificado; remitente
+  `acceso@penginexr.com` (`MAIL_FROM`). El código usa una interfaz `MailSender`: cambiar de
+  proveedor no toca el portal. Sin `RESEND_API_KEY` no se envía nada (`MAIL_DEV_LOG=true` lo
+  imprime en consola, solo en local).
 
 ## 10. Ideas pendientes (chips NTAG 213)
 
