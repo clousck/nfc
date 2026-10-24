@@ -148,6 +148,8 @@ export function renderReportPage(
   stats: ReportStats,
   now: number,
   loyalty: ReportLoyalty | null = null,
+  /** Desde el portal: enlace de vuelta y sin el aviso de "enlace privado". */
+  options: { backUrl?: string } = {},
 ): string {
   const today = stats.days[stats.days.length - 1]?.count ?? 0;
   const last7 = stats.days.slice(-7).reduce((sum, d) => sum + d.count, 0);
@@ -245,12 +247,13 @@ export function renderReportPage(
 <body>
 <main class="viz-root">
   <header class="page-head">
+    ${options.backUrl ? `<p class="sub"><a href="${esc(options.backUrl)}">← Volver al portal</a></p>` : ''}
     <h1>${esc(report.name)}</h1>
     <p class="sub">Estadísticas de tus chips y códigos QR · actualizado a las ${esc(timeOnly.format(new Date(now)))}</p>
   </header>
   ${loyalty ? loyaltySection(loyalty) : ''}
   ${body}
-  <footer class="foot">Las visitas automáticas (vistas previas de WhatsApp, buscadores…) no se cuentan. Este enlace es privado: compártelo solo con quien quieras.</footer>
+  <footer class="foot">Las visitas automáticas (vistas previas de WhatsApp, buscadores…) no se cuentan.${options.backUrl ? '' : ' Este enlace es privado: compártelo solo con quien quieras.'}</footer>
 </main>
 </body>
 </html>`;

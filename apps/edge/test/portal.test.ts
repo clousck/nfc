@@ -1,90 +1,33 @@
-import { createExecutionContext, waitOnExecutionContext } from 'cloudflare:test';
 import { env } from 'cloudflare:workers';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import worker from '../src/index.js';
+import {
+  account,
+  BIZ,
+  business,
+  cookieOf,
+  internal,
+  INTERNAL,
+  linkIn,
+  login as loginWith,
+  mockMail,
+  OTHER,
+  portal,
+  PORTAL,
+  resetPortalTables,
+  send,
+  type SentMail,
+} from './portal-helpers.js';
 
-const INTERNAL = 'test-internal-token-0123456789abcdef';
-const BIZ = 'b_cafe00000001';
-const OTHER = 'b_otro00000001';
-const PORTAL = 'https://negocios.penginexr.com';
-const testEnv = { ...env, RESEND_API_KEY: 're_test' };
-
-async function send(request: Request): Promise<Response> {
-  const ctx = createExecutionContext();
-  const response = await worker.fetch(request, testEnv, ctx);
-  await waitOnExecutionContext(ctx);
-  return response;
-}
-
-const internal = (method: string, path: string, body?: unknown) =>
-  send(
-    new Request(`https://go.penginexr.com/internal${path}`, {
-      method,
-      headers: { authorization: `Bearer ${INTERNAL}`, 'content-type': 'application/json' },
-      body: body === undefined ? undefined : JSON.stringify(body),
-    }),
-  );
-
-function portal(
-  method: string,
-  path: string,
-  init: { form?: Record<string, string>; cookie?: string; site?: string } = {},
-) {
-  const headers: Record<string, string> = { 'sec-fetch-site': init.site ?? 'same-origin' };
-  if (init.cookie) headers['cookie'] = init.cookie;
-  return send(
-    new Request(`${PORTAL}${path}`, {
-      method,
-      headers,
-      redirect: 'manual',
-      body: init.form ? new URLSearchParams(init.form) : undefined,
-    }),
-  );
-}
-
-async function business(id: string, status = 'active', revision = 1) {
-  await internal('PUT', `/businesses/${id}`, {
-    id,
-    name: id === BIZ ? 'Café X' : 'Otro',
-    status,
-    reportToken: null,
-    loyaltyVisits: null,
-    revision,
-  });
-}
-
-async function account(email = 'ana@cafe.ec', businessId = BIZ) {
-  const res = await internal('POST', `/businesses/${businessId}/accounts`, { email });
-  return ((await res.json()) as { id: string }).id;
-}
-
-let mails: { to: string[]; text: string }[];
+let mails: SentMail[];
 
 beforeEach(async () => {
-  await env.DB.exec(
-    'DELETE FROM sessions; DELETE FROM login_tokens; DELETE FROM memberships; DELETE FROM accounts; DELETE FROM audit_log; DELETE FROM business_profile; DELETE FROM business_settings;',
-  );
-  mails = [];
-  vi.spyOn(globalThis, 'fetch').mockImplementation(async (input, init) => {
-    const url = input instanceof Request ? input.url : String(input);
-    if (url !== 'https://api.resend.com/emails') throw new Error(`fetch inesperado: ${url}`);
-    mails.push(JSON.parse(String(init?.body)) as { to: string[]; text: string });
-    return new Response('{"id":"x"}', { status: 200 });
-  });
+  await resetPortalTables();
+  mails = mockMail();
 });
 
 afterEach(() => vi.restoreAllMocks());
 
-const linkIn = (text: string) => /https:\/\/negocios\.penginexr\.com\/entrar\/\S+/.exec(text)?.[0];
-const cookieOf = (res: Response) => (res.headers.get('set-cookie') ?? '').split(';')[0] ?? '';
-
-async function login(email = 'ana@cafe.ec'): Promise<string> {
-  await portal('POST', '/entrar', { form: { email } });
-  const link = linkIn(mails.at(-1)?.text ?? '');
-  if (!link) throw new Error('no llegó el correo');
-  const res = await portal('POST', new URL(link).pathname);
-  return cookieOf(res);
-}
+const login = (email?: string) => loginWith(mails, email);
 
 describe('portal: host y protección', () => {
   it('la API interna no existe en el host del portal', async () => {
@@ -193,7 +136,7 @@ describe('portal: enlace mágico', () => {
   it('un negocio cancelado no da acceso', async () => {
     await business(BIZ);
     await account();
-    await business(BIZ, 'cancelled', 2);
+    await business(BIZ, { status: 'cancelled' });
     await portal('POST', '/entrar', { form: { email: 'ana@cafe.ec' } });
     expect(mails).toHaveLength(0);
   });
@@ -202,7 +145,7 @@ describe('portal: enlace mágico', () => {
 describe('portal: sesión', () => {
   it('solo ve sus negocios; uno ajeno responde como inexistente', async () => {
     await business(BIZ);
-    await business(OTHER, 'active', 2);
+    await business(OTHER);
     await account();
     const cookie = await login();
     expect((await portal('GET', `/n/${OTHER}`, { cookie })).status).toBe(404);
@@ -210,7 +153,7 @@ describe('portal: sesión', () => {
 
   it('con varios negocios muestra la lista', async () => {
     await business(BIZ);
-    await business(OTHER, 'active', 2);
+    await business(OTHER);
     await account();
     await account('ana@cafe.ec', OTHER);
     const cookie = await login();

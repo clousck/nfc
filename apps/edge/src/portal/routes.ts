@@ -4,8 +4,8 @@ import type { Env } from '../env.js';
 import { pageHeaders, STRICT_CSP } from '../html.js';
 import { hashToken, isSameOrigin } from '../loyalty/security.js';
 import { allowRequest, clientIp } from '../rate-limit.js';
+import { businessRoutes } from './business-routes.js';
 import {
-  businessPage,
   checkEmailPage,
   confirmLoginPage,
   homePage,
@@ -134,15 +134,7 @@ portalRoutes.get('/', (c) => {
   return html(homePage(session));
 });
 
-/** Negocio del dueño. Un negocio que no es suyo responde igual que uno inexistente. */
-portalRoutes.get('/n/:businessId', (c) => {
-  const session = c.get('session');
-  const business = session.businesses.find((b) => b.id === c.req.param('businessId'));
-  if (!business) {
-    return html(messagePage('Página no encontrada', 'Este negocio no existe.', session), 404);
-  }
-  return html(businessPage(session, business));
-});
+portalRoutes.route('/n/:businessId', businessRoutes);
 
 portalRoutes.notFound(() =>
   html(messagePage('Página no encontrada', 'Esta dirección no existe en el portal.'), 404),

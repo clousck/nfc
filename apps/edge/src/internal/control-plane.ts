@@ -79,7 +79,7 @@ const TAG_SELECT = `SELECT t.*, s.slug AS s_slug, s.target_url AS s_target_url, 
     s.paused_at AS s_paused_at, s.updated_at AS s_updated_at
   FROM tag_inventory t LEFT JOIN tag_settings s ON s.slug = t.slug AND s.business_id = t.business_id`;
 
-type ProjectedTag = TagState & { pausedAt: number | null };
+export type ProjectedTag = TagState & { pausedAt: number | null };
 
 const toBusiness = (r: BusinessRow): BusinessState => ({
   id: r.id,
@@ -493,9 +493,14 @@ export async function putTagSettings(
   patch: PutTagSettingsBody,
   actor: Actor,
   now = Date.now(),
+  /** El dueño solo puede tocar chips de su negocio: si no coincide, responde como inexistente. */
+  expectedBusinessId: string | null = null,
 ): Promise<SettingsResult<TagSettings>> {
   const row = await tagRow(env.DB, slug);
   if (!row || row.deleted) return { ok: false, error: 'not_found' };
+  if (expectedBusinessId !== null && row.business_id !== expectedBusinessId) {
+    return { ok: false, error: 'not_found' };
+  }
   const businessId = row.business_id;
   if (!businessId) return { ok: false, error: 'not_assigned' };
   const current = toTag(row);
@@ -612,4 +617,19 @@ export async function settingsChanges(
       updatedAt: r.updated_at,
     })),
   };
+}
+
+/** Chips de un negocio con sus ajustes ya aplicados (portal). */
+export async function businessTags(db: D1Database, businessId: string): Promise<ProjectedTag[]> {
+  const { results } = await db
+    .prepare(`${TAG_SELECT} WHERE t.deleted = 0 AND t.business_id = ? ORDER BY t.number`)
+    .bind(businessId)
+    .all<TagRow>();
+  return results.map(toTag);
+}
+
+/** Negocio con sus ajustes ya aplicados (portal); null si no existe o está borrado. */
+export async function businessState(db: D1Database, id: string): Promise<BusinessState | null> {
+  const row = await businessRow(db, id);
+  return row && !row.deleted ? toBusiness(row) : null;
 }

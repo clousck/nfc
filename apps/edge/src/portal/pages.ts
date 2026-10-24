@@ -1,6 +1,6 @@
 import { LOGIN_PATH } from '@nfc/shared';
 import { esc } from '../html.js';
-import type { PortalBusiness, PortalSession } from './session.js';
+import type { PortalSession } from './session.js';
 
 // Páginas del portal de negocios (negocios.penginexr.com). HTML sin JavaScript: formularios
 // normales, CSP estricta y sin recursos externos.
@@ -42,6 +42,14 @@ const STYLES = `
   ul.plain { list-style: none; padding: 0; margin: 0; }
   ul.plain li + li { border-top: 1px solid var(--line); }
   ul.plain li { padding: .6rem 0; }
+  .tag { display: inline-block; font-size: .8rem; padding: .1rem .5rem; border-radius: 999px;
+    border: 1px solid var(--line); }
+  .tag-ok { background: var(--ok-bg); color: var(--ok-text); border-color: transparent; }
+  .tag-warn { background: var(--warn-bg); color: var(--warn-text); border-color: transparent; }
+  details { margin-top: .75rem; }
+  summary { cursor: pointer; color: var(--accent); }
+  details form { margin-top: .5rem; }
+  .card form + form, .card form + details { margin-top: .75rem; }
 `;
 
 export function layout(title: string, body: string, session?: PortalSession | null): string {
@@ -150,18 +158,6 @@ export function homePage(session: PortalSession): string {
   <h2>Tus negocios</h2>
   <ul class="plain">${items}</ul>
 </section>`,
-    session,
-  );
-}
-
-/** Página del negocio (se completa en el paso 4: chips, premio, estadísticas, auditoría). */
-export function businessPage(session: PortalSession, business: PortalBusiness): string {
-  const others =
-    session.businesses.length > 1 ? `<p class="small"><a href="/">← Tus negocios</a></p>` : '';
-  return layout(
-    business.name,
-    `${others}<h1>${esc(business.name)}</h1>
-<section class="card"><p class="muted">Pronto podrás configurar tus chips desde aquí.</p></section>`,
     session,
   );
 }
