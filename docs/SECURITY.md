@@ -83,9 +83,9 @@ Por su naturaleza, cada control es **técnico** (código/configuración), **admi
 | Validar canjes con el enlace de estadísticas | Credencial por dispositivo del personal, revocable    | Planeado |
 | Acceso al panel admin                        | Cloudflare Access + validación del JWT en la app      | Hecho    |
 | Robo de una copia de la base                 | Solo hashes de cookies y tokens; sin IPs              | Hecho    |
-| Campos internos expuestos por la API         | DTOs explícitos (nada de `...spread` de filas)        | Planeado |
-| Borrados a medias                            | Transacciones (`db.batch` en D1)                      | Planeado |
-| Cambios no publicados en KV                  | Cola de publicación con reintentos                    | Planeado |
+| Campos internos expuestos por la API         | DTOs explícitos (nada de `...spread` de filas)        | Hecho    |
+| Borrados a medias                            | Transacciones (`db.batch` en D1)                      | Hecho    |
+| Cambios no publicados en KV                  | Cola de publicación con reintentos                    | Hecho    |
 | Fichero CSV con fórmulas                     | Escapado de `= + - @`                                 | Hecho    |
 
 ## 4. Rate limiting _(Planeado)_
@@ -167,14 +167,14 @@ solo uso; los cambios de configuración de un negocio quedan en la **auditoría*
 
 ## 6. Inventario de secretos
 
-| Secreto                     | Dónde vive                           | Permisos                                       | Estado             |
-| --------------------------- | ------------------------------------ | ---------------------------------------------- | ------------------ |
-| Token API de la Pi          | `.env` del stack en Dockge           | KV Edit + D1 (hoy); **ninguno** tras la fase 2 | Hecho → se elimina |
-| `INTERNAL_API_TOKEN`        | Secreto del Worker + `.env` de la Pi | Solo `/internal/*`                             | Planeado           |
-| `CLOUDFLARE_API_TOKEN` (CI) | GitHub Secrets                       | Workers Scripts, rutas de la zona, D1 Edit     | Planeado           |
-| `PRESENCE_MASTER_KEY`       | Secreto del Worker                   | Firma del QR rotativo / claves de chips        | Planeado           |
-| `TUNNEL_TOKEN`              | `.env` del stack en Dockge           | Solo el túnel `nfc-admin`                      | Hecho              |
-| `CF_ACCESS_AUD`             | `.env` del stack en Dockge           | No es secreto (identifica la app de Access)    | Hecho              |
+| Secreto                     | Dónde vive                           | Permisos                                    | Estado   |
+| --------------------------- | ------------------------------------ | ------------------------------------------- | -------- |
+| Token API de la Pi          | — (eliminado en la fase 2)           | La Pi ya no habla con la API de Cloudflare  | Revocar  |
+| `INTERNAL_API_TOKEN`        | Secreto del Worker + `.env` de la Pi | Solo `/internal/*`                          | Hecho    |
+| `CLOUDFLARE_API_TOKEN` (CI) | GitHub Secrets                       | Workers Scripts, rutas de la zona, D1 Edit  | Hecho    |
+| `PRESENCE_MASTER_KEY`       | Secreto del Worker                   | Firma del QR rotativo / claves de chips     | Planeado |
+| `TUNNEL_TOKEN`              | `.env` del stack en Dockge           | Solo el túnel `nfc-admin`                   | Hecho    |
+| `CF_ACCESS_AUD`             | `.env` del stack en Dockge           | No es secreto (identifica la app de Access) | Hecho    |
 
 Nunca en el repo. Los tokens de API llevan caducidad de 1 año y se rotan con aviso.
 

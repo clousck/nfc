@@ -28,9 +28,9 @@ Requisitos que guían el diseño:
                          │  ├─ KV  LANDINGS→ config de landing      │
                          │  └─ D1  events  → registro de escaneos   │
                          └──────────────▲───────────────────────────┘
-                                        │ Cloudflare API (token restringido)
-                                        │  - escribe KV al editar
-                                        │  - consulta D1 para estadísticas
+                                        │ API interna /internal/* (INTERNAL_API_TOKEN)
+                                        │  - la Pi envía su estado; el Worker escribe KV
+                                        │  - el Worker responde estadísticas y fidelidad
                          ┌──────────────┴───────────────────────────┐
   Victor (admin) ───────▶│  Raspberry Pi  (apps/admin)              │
   nfc-admin.penginexr.com│  Dockge stack, túnel cloudflared propio  │
@@ -81,10 +81,10 @@ Solo deja de estar disponible el panel de administración.
   La app no implementa login en la Fase 1; valida el header `Cf-Access-Jwt-Assertion`.
 - **Responsabilidades**:
   - CRUD de negocios, chips y landings.
-  - Al guardar un chip o landing → escribe en KV vía Cloudflare API (SQLite es la fuente de verdad, KV es la copia publicada).
-  - Botón "Re-sincronizar todo" (reescribe KV completo desde SQLite) para recuperar consistencia.
+  - Al guardar un chip o negocio → nota en la cola `publish_queue` (misma transacción) y envío a `/internal/*` del Worker, que es el único que escribe en KV. Si falla, se reintenta solo (30 s → 15 min). SQLite es la fuente de verdad.
+  - Botón "Re-sincronizar todo": envía la foto completa; el Worker deja KV igual escribiendo solo lo que cambió.
   - Generar slug, URL final y QR (SVG/PNG) listos para imprimir.
-  - Estadísticas: consulta D1 vía API REST de Cloudflare (`/d1/database/{id}/query`).
+  - Estadísticas y fidelidad: se las pide al Worker (`/internal/*`); D1 tiene un solo dueño.
   - **Escritura del chip con Web NFC** (Chrome en Android): página que escribe la URL en el chip y
     lo bloquea con `makeReadOnly()`. Fallback: copiar URL y escribir con NFC Tools.
 
@@ -166,7 +166,7 @@ Considerar a futuro un dominio más corto y neutral (sin "penginexr") para la ma
 ## 6. Seguridad
 
 - Chips **bloqueados permanentemente** tras escribirlos (el destino se cambia en KV, no en el chip).
-- **Token de Cloudflare** del admin con permisos mínimos: `Workers KV Storage:Edit` y `D1:Read` sobre los recursos del proyecto. Nunca en el repo; en `.env` del stack de Dockge.
+- **La Pi no tiene token de Cloudflare.** Solo `INTERNAL_API_TOKEN` (secreto compartido con el Worker para `/internal/*`), en el `.env` del stack de Dockge. Ver [SECURITY.md](SECURITY.md#6-inventario-de-secretos).
 - Validación de URLs destino: solo `https://` (y `wa.me`, `g.page`, `maps.app.goo.gl`, etc. en una allowlist opcional).
 - Sin IPs ni datos personales en `scans`.
 - `.env.example` en el repo; `.env` en `.gitignore`.
@@ -177,7 +177,7 @@ Considerar a futuro un dominio más corto y neutral (sin "penginexr") para la ma
 |---|---|---|
 | Pi apagada / sin internet | Solo el panel admin cae | Diseño edge-first |
 | SD corrupta | Pérdida de SQLite | Backup diario a `/mnt/usb` + copia semanal fuera de la Pi |
-| KV desincronizado | Destino viejo | `synced_at` + botón "Re-sincronizar todo" |
+| KV desincronizado | Destino viejo | Cola de publicación con reintentos + botón "Re-sincronizar todo" |
 | Cuenta Cloudflare | Todo cae | Riesgo aceptado; exportar D1 y KV periódicamente |
 
 **Backups** (`infra/backup.sh`, diario 03:00):
