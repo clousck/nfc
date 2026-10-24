@@ -101,7 +101,7 @@ escrituras y consultas.
 | Asignar / liberar / bloquear / borrar chips  |  ✅   |       |          |
 | Cambiar plan o estado del negocio            |  ✅   |       |          |
 | Cambiar destino y etiqueta de **sus** chips  |  ✅   |  ✅   |          |
-| Visitas del premio (3–20)                    |  ✅   |  ✅   |          |
+| Visitas del premio (2–20)                    |  ✅   |  ✅   |          |
 | Ver estadísticas                             |  ✅   |  ✅   |          |
 | Ver y exportar contactos de fidelidad        |  ✅   |  ✅   |          |
 | Vincular / revocar dispositivos del personal |  ✅   |  ✅   |          |
@@ -135,7 +135,7 @@ página inexistente. Funciona sin JavaScript (las confirmaciones usan `<details>
 
 | Ruta                    | Qué hace                                                                     |
 | ----------------------- | ---------------------------------------------------------------------------- |
-| `/n/<id>`               | Chips y estado; etiqueta y destino (solo `https`); visitas del premio (3–20) |
+| `/n/<id>`               | Chips y estado; etiqueta y destino (solo `https`); visitas del premio (2–20) |
 |                         | "Stand perdido o dañado": pausa el chip y te avisa por correo (una vez)      |
 | `/n/<id>/estadisticas`  | Las mismas cifras que `/r/<token>`, detrás de la sesión                      |
 | `/n/<id>/contactos.csv` | Solo contactos con permiso de promociones; cada descarga va a la auditoría   |
@@ -162,7 +162,7 @@ siendo del admin (es comercial); el dueño solo ajusta las visitas si ya está a
 
 ## 5. Qué puede configurar el negocio, y por qué asignar chips es solo del admin
 
-**Sí puede:** el destino de sus chips (solo `https`), las etiquetas, las visitas del premio (3–20),
+**Sí puede:** el destino de sus chips (solo `https`), las etiquetas, las visitas del premio (2–20),
 los métodos de presencia permitidos por su plan y su personal. Cada cambio queda en la
 **auditoría** (quién, qué, antes, después, cuándo).
 
