@@ -6,6 +6,7 @@ import {
 } from '@nfc/shared';
 import qrcode from 'qrcode-generator';
 import { esc, TIME_ZONE } from '../html.js';
+import { SCANNER_STYLES, scannerHtml, scannerScript } from './scanner.js';
 
 const dateTime = new Intl.DateTimeFormat('es-EC', {
   timeZone: TIME_ZONE,
@@ -347,6 +348,11 @@ export function validationPage(businessName: string | null, outcome: ValidationO
 </section>`;
       break;
   }
+  if (outcome.kind !== 'not_staff') {
+    body += `
+<a class="btn btn-primary" href="/v?escanear=1">📷 Escanear otro QR</a>
+<a class="btn" href="/v">Escribir un código</a>`;
+  }
   return layout('Validar canje', body);
 }
 
@@ -357,13 +363,16 @@ export function staffHomePage(input: {
   label: string;
   color: { name: string; hex: string };
   error: boolean;
+  nonce: string;
+  autostart: boolean;
 }): string {
   const body = `
 <section class="card">
   <p class="eyebrow">${esc(input.businessName)} · ${esc(input.label)}</p>
   <h1>Validar canjes</h1>
-  <p>Escanea con la cámara el QR que muestra el cliente. Si no se puede, escribe el código:</p>
+  <p>Escanea el QR que muestra el cliente. Si no se puede, escribe el código:</p>
   ${input.error ? '<p class="alert">Ese código no es válido. Revísalo e inténtalo otra vez.</p>' : ''}
+  ${scannerHtml()}
   <form method="get" action="/v" class="form">
     <label>Código
       <input name="codigo" required placeholder="K7PQ-42XZ" autocomplete="off" autocapitalize="characters">
@@ -371,8 +380,9 @@ export function staffHomePage(input: {
     <button type="submit" class="btn btn-primary">Validar</button>
   </form>
   <p class="muted small">Color de hoy: <strong>${esc(input.color.name)}</strong>. La pantalla de canje del cliente tiene este color y un reloj con segundos: una captura de pantalla no lo tiene.</p>
-</section>`;
-  return layout('Validar canjes', body);
+</section>
+${scannerScript(input.nonce, input.autostart)}`;
+  return layout('Validar canjes', body, `<style>${SCANNER_STYLES}</style>`);
 }
 
 export function pairingConfirmPage(input: {

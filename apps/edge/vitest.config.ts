@@ -1,6 +1,10 @@
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { cloudflareTest, readD1Migrations } from '@cloudflare/vitest-plugin';
 import { defineConfig } from 'vitest/config';
+
+// wrangler.toml declara [assets] en public/, que genera este script (no se versiona).
+execFileSync(process.execPath, [fileURLToPath(new URL('./scripts/vendor.mjs', import.meta.url))]);
 
 const migrationsDir = fileURLToPath(new URL('../../infra/d1/migrations', import.meta.url));
 

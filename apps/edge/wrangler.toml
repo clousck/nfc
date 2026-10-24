@@ -10,6 +10,14 @@ routes = [
   { pattern = "negocios.penginexr.com", custom_domain = true },
 ]
 
+# Estáticos (public/, generado por scripts/vendor.mjs; no se versiona): solo el lector de QR
+# para iPhone. Lo que no es un fichero de public/ lo atiende el Worker.
+[build]
+command = "node scripts/vendor.mjs"
+
+[assets]
+directory = "./public"
+
 [vars]
 # Ecuador no tiene horario de verano: UTC-5 fijo.
 REPORT_TZ_OFFSET_MINUTES = "-300"

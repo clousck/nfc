@@ -81,6 +81,32 @@ describe('vincular móviles del personal', () => {
     expect(home).toContain('Caja – María');
   });
 
+  it('la pantalla del personal trae el lector de QR con su propia CSP', async () => {
+    const staff = await pair();
+    const res = await go('GET', '/v', staff);
+    const csp = res.headers.get('content-security-policy') ?? '';
+    const nonce = /'nonce-([0-9a-f]{32})'/.exec(csp)?.[1];
+    expect(nonce).toBeDefined();
+    expect(csp).toContain("script-src 'nonce-");
+    expect(csp).toContain("frame-ancestors 'none'");
+    const page = await res.text();
+    expect(page).toContain('id="scan-start"');
+    expect(page).toContain(`<script nonce="${nonce}">`);
+    expect(page).toContain('/vendor/jsqr-1.4.0.js');
+    expect(page).not.toMatch(/\n {2}start\(\);/);
+
+    // "Escanear otro" abre la cámara al cargar.
+    expect(await (await go('GET', '/v?escanear=1', staff)).text()).toMatch(/\n {2}start\(\);/);
+  });
+
+  it('tras validar se ofrece escanear el siguiente', async () => {
+    const staff = await pair();
+    const page = await (await go('GET', '/v/AAAAAAAA', staff)).text();
+    expect(page).toContain('href="/v?escanear=1"');
+    // Sin móvil vinculado no hay lector.
+    expect(await (await go('GET', '/v/AAAAAAAA')).text()).not.toContain('escanear=1');
+  });
+
   it('el portal lista los móviles y queda en la actividad', async () => {
     await pair();
     const list = await (await portal('GET', `/n/${BIZ}/personal`, { cookie })).text();

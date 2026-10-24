@@ -11,6 +11,7 @@ import { Hono, type Context } from 'hono';
 import type { Env } from '../env.js';
 import { pageHeaders, STRICT_CSP } from '../html.js';
 import { allowRequest, clientIp } from '../rate-limit.js';
+import { scannerCsp } from './scanner.js';
 import {
   cardPage,
   colorOfDay,
@@ -438,13 +439,17 @@ loyaltyRoutes.get('/v', async (c) => {
   if (code) return redirect(`/v/${code}`);
   const device = await readStaffDevice(c.env, c.req.raw, c.executionCtx);
   if (!device) return html(validationPage(null, { kind: 'not_staff' }));
-  return html(
+  const nonce = crypto.randomUUID().replace(/-/g, '');
+  return new Response(
     staffHomePage({
       businessName: device.businessName,
       label: device.label,
       color: colorOfDay(localDay(Date.now(), offset(c.env))),
       error: c.req.query('codigo') !== undefined,
+      nonce,
+      autostart: c.req.query('escanear') === '1',
     }),
+    { headers: pageHeaders(scannerCsp(nonce)) },
   );
 });
 

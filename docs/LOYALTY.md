@@ -99,9 +99,13 @@ cada acercamiento.
      o enlace de un solo uso (15 min), el personal lo abre en ese móvil y pulsa **Vincular**.
      Cada móvil se revoca por separado (detalle en
      [BUSINESS-ACCOUNTS.md §4](BUSINESS-ACCOUNTS.md#personal-vinculación-por-dispositivo)).
-   - En cada canje, escanea el QR del cliente con la **cámara normal** del móvil: se abre
-     _"✓ Canje válido · María · 6 visitas"_ o _"Este canje ya se usó"_ en rojo. Queda registrado
-     qué móvil lo validó.
+   - En cada canje, escanea el QR del cliente con el botón **📷 Escanear QR** de
+     `go.penginexr.com/v` (o con la cámara normal del móvil): se abre
+     _"✓ Canje válido · María · 6 visitas"_ o _"Este canje ya se usó"_ en rojo, con
+     **Escanear otro QR** para el siguiente. Queda registrado qué móvil lo validó.
+   - El lector usa `BarcodeDetector` (Chrome en Android) y, si no existe (Safari en iPhone),
+     jsQR, servido como estático del propio Worker (`/vendor/jsqr-<versión>.js`, generado por
+     `apps/edge/scripts/vendor.mjs`). La imagen de la cámara no sale del móvil.
    - Si el QR no se puede escanear, el código se teclea en `go.penginexr.com/v` desde el móvil
      vinculado.
    - ~~Activar la validación desde el enlace de estadísticas~~: retirado en la fase 4. Ese enlace
