@@ -1,5 +1,6 @@
 import type { ReportRecord } from '@nfc/shared';
 import { esc, TIME_ZONE } from './html.js';
+import { THEME_CSS } from './ui/theme.js';
 import type { LoyaltySummary } from './loyalty/store.js';
 import { REPORT_DAYS, type ReportStats } from './report.js';
 
@@ -231,7 +232,7 @@ export function renderReportPage(
 <body>
 <main class="viz-root">
   <header class="page-head">
-    ${options.backUrl ? `<p class="sub"><a href="${esc(options.backUrl)}">← Volver al portal</a></p>` : ''}
+    ${options.backUrl ? `<p class="sub"><a href="${esc(options.backUrl)}">Volver al portal</a></p>` : ''}
     <h1>${esc(report.name)}</h1>
     <p class="sub">Estadísticas de tus chips y códigos QR · actualizado a las ${esc(timeOnly.format(new Date(now)))}</p>
   </header>
@@ -244,27 +245,22 @@ export function renderReportPage(
 }
 
 // Tokens de la paleta de referencia (dataviz): chrome + categorías 1–3, claro y oscuro.
-const STYLES = `
-.viz-root{color-scheme:light;--page:#f9f9f7;--surface-1:#fcfcfb;--text-primary:#0b0b0b;--text-secondary:#52514e;--muted:#898781;--grid:#e1e0d9;--axis:#c3c2b7;--border:rgba(11,11,11,.10);--series-1:#2a78d6;--series-2:#eb6834;--series-3:#1baf7a;--tip-bg:#0b0b0b;--tip-text:#f0efec}
-@media (prefers-color-scheme:dark){.viz-root{color-scheme:dark;--page:#0d0d0d;--surface-1:#1a1a19;--text-primary:#f0efec;--text-secondary:#c3c2b7;--muted:#898781;--grid:#2c2c2a;--axis:#383835;--border:rgba(255,255,255,.10);--series-1:#3987e5;--series-2:#d95926;--series-3:#199e70;--tip-bg:#f0efec;--tip-text:#0b0b0b}}
-*{box-sizing:border-box}
-html,body{margin:0}
-body{background:#f9f9f7}
-@media (prefers-color-scheme:dark){body{background:#0d0d0d}}
-.viz-root{max-width:880px;margin:0 auto;padding:20px 16px 48px;font-family:system-ui,-apple-system,"Segoe UI",sans-serif;color:var(--text-primary);line-height:1.45}
+const STYLES = `${THEME_CSS}
+.viz-root{--page:var(--ground);--surface-1:var(--surface);--text-primary:var(--text);--text-secondary:var(--muted);--grid:#f1eaed;--axis:#d9cfd3;--series-1:#b8336a;--series-2:#6b7280;--series-3:#e3a3bf;--tip-bg:#1a1216;--tip-text:#fff}
+.viz-root{max-width:880px;margin:0 auto;padding:24px 20px 56px;color:var(--text-primary)}
 h1{font-size:1.5rem;margin:0 0 4px}
 h2{font-size:1rem;margin:0}
 .sub{margin:2px 0 14px;color:var(--text-secondary);font-size:.875rem}
 .page-head .sub{margin-bottom:20px}
 .muted{color:var(--muted)}
-.card{background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:16px;margin-bottom:16px}
+.card{margin-bottom:16px}
 .empty{text-align:center;color:var(--text-secondary)}
 .kpis{display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px}
 .kpis-2{grid-template-columns:repeat(2,1fr);margin:0}
-.tile{background:var(--surface-1);border:1px solid var(--border);border-radius:12px;padding:12px 14px}
+.tile{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px}
 .card .tile{border-radius:8px}
 .tile-label{font-size:.8rem;color:var(--text-secondary)}
-.tile-value{font-size:1.75rem;font-weight:600;line-height:1.2;margin-top:2px}
+.tile-value{font-size:1.75rem;font-weight:600;letter-spacing:-.02em;line-height:1.2;margin-top:4px;font-variant-numeric:tabular-nums}
 .tile-note{font-size:.8rem;color:var(--text-secondary)}
 .grid-2{display:grid;gap:16px;grid-template-columns:1fr}
 .grid-2 .card{margin-bottom:0}

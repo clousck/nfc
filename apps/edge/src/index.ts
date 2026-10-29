@@ -66,7 +66,7 @@ app.get('/r/:token', async (c) => {
       // El token va en la URL: que no se filtre por Referer ni se pueda incrustar la página.
       'referrer-policy': 'no-referrer',
       'content-security-policy':
-        "default-src 'none'; style-src 'unsafe-inline'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
+        "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; form-action 'self'; frame-ancestors 'none'; base-uri 'none'",
     },
   });
 });

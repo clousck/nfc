@@ -1,58 +1,50 @@
 import { LOGIN_PATH } from '@nfc/shared';
 import { esc } from '../html.js';
+import { THEME_CSS } from '../ui/theme.js';
 import type { PortalSession } from './session.js';
 
 // Páginas del portal de negocios (negocios.penginexr.com). HTML sin JavaScript: formularios
 // normales, CSP estricta y sin recursos externos.
 
-const STYLES = `
-  :root { color-scheme: light dark; --bg:#f6f7f9; --card:#fff; --text:#1f2328; --muted:#59636e;
-    --line:#d1d9e0; --accent:#0969da; --accent-text:#fff; --warn-bg:#fff8c5; --warn-text:#7d4e00;
-    --ok-bg:#dafbe1; --ok-text:#116329; }
-  @media (prefers-color-scheme: dark) { :root { --bg:#0d1117; --card:#151b23; --text:#e6edf3;
-    --muted:#9198a1; --line:#3d444d; --accent:#4493f8; --accent-text:#0d1117; --warn-bg:#2e2410;
-    --warn-text:#d29922; --ok-bg:#12261e; --ok-text:#3fb950; } }
-  * { box-sizing: border-box; }
-  body { margin: 0; font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
-    background: var(--bg); color: var(--text); line-height: 1.5; }
-  header { display: flex; justify-content: space-between; align-items: center; gap: 1rem;
-    padding: .75rem 1rem; border-bottom: 1px solid var(--line); background: var(--card); }
-  header .brand { font-weight: 600; }
-  main { max-width: 40rem; margin: 0 auto; padding: 1.25rem 1rem 3rem; }
-  h1 { font-size: 1.4rem; margin: .5rem 0 1rem; }
-  h2 { font-size: 1.1rem; margin: 0 0 .75rem; }
-  .card { background: var(--card); border: 1px solid var(--line); border-radius: 12px;
-    padding: 1.1rem; margin-bottom: 1rem; }
-  .muted { color: var(--muted); }
-  .small { font-size: .9rem; }
-  .alert { background: var(--warn-bg); color: var(--warn-text); padding: .6rem .8rem;
-    border-radius: 8px; }
-  .ok { background: var(--ok-bg); color: var(--ok-text); padding: .6rem .8rem; border-radius: 8px; }
-  form.stack { display: grid; gap: .75rem; }
-  label { display: grid; gap: .3rem; font-weight: 500; }
-  input, select { font: inherit; padding: .6rem .7rem; border: 1px solid var(--line);
-    border-radius: 8px; background: var(--bg); color: var(--text); width: 100%; }
-  .btn { font: inherit; display: inline-block; padding: .6rem 1rem; border-radius: 8px;
-    border: 1px solid var(--line); background: var(--card); color: var(--text); cursor: pointer;
-    text-decoration: none; text-align: center; }
-  .btn-primary { background: var(--accent); border-color: var(--accent); color: var(--accent-text);
-    font-weight: 600; }
-  .btn-link { border: 0; background: none; color: var(--accent); padding: 0; cursor: pointer;
-    font: inherit; }
-  ul.plain { list-style: none; padding: 0; margin: 0; }
-  ul.plain li + li { border-top: 1px solid var(--line); }
-  ul.plain li { padding: .6rem 0; }
-  .tag { display: inline-block; font-size: .8rem; padding: .1rem .5rem; border-radius: 999px;
-    border: 1px solid var(--line); }
-  .tag-ok { background: var(--ok-bg); color: var(--ok-text); border-color: transparent; }
-  .tag-warn { background: var(--warn-bg); color: var(--warn-text); border-color: transparent; }
-  details { margin-top: .75rem; }
-  summary { cursor: pointer; color: var(--accent); }
-  details form { margin-top: .5rem; }
-  .card form + form, .card form + details { margin-top: .75rem; }
-  .qr { max-width: 16rem; margin: 1rem auto; background: #fff; padding: .5rem; border-radius: 8px; }
-  .qr svg { display: block; width: 100%; height: auto; }
-  .break { word-break: break-all; }
+const STYLES = `${THEME_CSS}
+header{display:flex;justify-content:space-between;align-items:center;gap:1rem;padding:14px 20px;max-width:56rem;margin:0 auto}
+header .brand{display:inline-flex;align-items:center;gap:10px;font-weight:600}
+header .brand::before{content:"";width:22px;height:22px;border-radius:50%;border:2px solid var(--accent);background:var(--accent-soft)}
+header form{display:flex;align-items:center;gap:12px}
+main{max-width:56rem;margin:0 auto;padding:8px 20px 64px}
+main>h1{font-size:1.5rem;margin:20px 0 16px}
+.back{font-size:.875rem;color:var(--muted)}
+.biz{margin:12px 0 4px;color:var(--muted);font-weight:500}
+.tabs{display:flex;gap:4px;overflow-x:auto;margin:0 -4px 8px;padding-bottom:2px;scrollbar-width:none}
+.tabs a{flex:none;padding:8px 12px;border-radius:var(--radius-control);color:var(--muted);text-decoration:none;font-weight:500;font-size:.9375rem;transition:background-color .15s,color .15s}
+.tabs a:hover{background:var(--raised);color:var(--text)}
+.tabs a[aria-current=page]{background:var(--accent-soft);color:var(--accent-ink)}
+.card{margin-bottom:16px}
+.card h2{margin-bottom:12px}
+.ok{background:var(--positive-soft);color:#14532d;padding:12px 14px;border-radius:var(--radius-control);font-weight:500}
+form.stack{display:grid;gap:14px}
+label{display:grid;gap:6px;font-weight:500;font-size:.9375rem}
+input,select{min-height:44px;padding:10px 12px;border:1px solid var(--control);border-radius:var(--radius-control);background:var(--surface);width:100%;transition:border-color .15s}
+input:focus,select:focus{border-color:var(--accent);outline:none}
+.btn{display:inline-flex;width:auto;min-height:44px}
+form.stack .btn{justify-self:start}
+.btn-primary{background:var(--accent);border-color:var(--accent)}
+.btn-primary:hover{background:var(--accent-ink);border-color:var(--accent-ink)}
+.btn-link{border:0;background:none;color:var(--accent-ink);padding:0;cursor:pointer;font:inherit;text-decoration:underline;text-underline-offset:3px}
+ul.plain{list-style:none;padding:0;margin:0}
+ul.plain li+li{border-top:1px solid var(--border)}
+ul.plain li{padding:12px 0}
+.tag{display:inline-block;font-size:.8125rem;font-weight:500;padding:2px 10px;border-radius:999px;background:var(--raised);color:var(--muted)}
+.tag-ok{background:var(--positive-soft);color:#14532d}
+.tag-warn{background:var(--warning-soft);color:var(--warning)}
+details{margin-top:12px}
+summary{cursor:pointer;color:var(--accent-ink);font-weight:500}
+details form{margin-top:10px}
+.card form+form,.card form+details{margin-top:12px}
+.qr{max-width:20rem;margin:16px auto;background:#fff;padding:14px;border-radius:var(--radius);border:2px solid var(--accent)}
+.qr svg{display:block;width:100%;height:auto}
+.break{word-break:break-all}
+@media (max-width:600px){header,main{padding-left:16px;padding-right:16px}}
 `;
 
 export function layout(title: string, body: string, session?: PortalSession | null): string {

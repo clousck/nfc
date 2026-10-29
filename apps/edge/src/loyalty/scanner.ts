@@ -7,13 +7,13 @@ export const JSQR_PATH = '/vendor/jsqr-1.4.0.js';
 
 /** CSP de las páginas con lector: script propio con nonce y jsQR desde el mismo origen. */
 export function scannerCsp(nonce: string): string {
-  return `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}' 'self'; img-src data:; media-src 'self' blob:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`;
+  return `default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; script-src 'nonce-${nonce}' 'self'; img-src data:; media-src 'self' blob:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`;
 }
 
 /** Botón, vídeo y avisos del lector. */
 export function scannerHtml(): string {
   return `<div class="scanner">
-  <button type="button" id="scan-start" class="btn btn-primary">📷 Escanear QR</button>
+  <button type="button" id="scan-start" class="btn btn-primary">Escanear QR</button>
   <div id="scan-view" class="scan-view" hidden>
     <div class="scan-box">
       <video id="scan-video" playsinline muted></video>

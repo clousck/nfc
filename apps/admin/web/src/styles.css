@@ -1,50 +1,39 @@
 :root {
-  color-scheme: light dark;
-  --bg: #f6f7f9;
+  /* Mismo sistema que las páginas del Worker (apps/edge/src/ui/theme.ts): un solo tono,
+     frambuesa, a plena fuerza solo en marcas pequeñas; sus tintes pálidos cubren las áreas. */
+  color-scheme: light;
+  --bg: #fbf7f8;
   --surface: #ffffff;
-  --text: #1f2328;
-  --muted: #59636e;
-  --border: #d1d9e0;
-  --primary: #0969da;
+  --raised: #f4eef0;
+  --text: #1a1216;
+  --muted: #62585d;
+  --border: #ebe3e6;
+  --control: #d6ccd0;
+  --primary: #b8336a;
+  --primary-ink: #6b1d3e;
+  --primary-soft: #fdf2f7;
+  --primary-track: #f8dbe8;
   --primary-text: #ffffff;
-  --danger: #cf222e;
-  --ok-bg: #dafbe1;
-  --ok-text: #116329;
-  --warn-bg: #fff8c5;
-  --warn-text: #7d4e00;
-  --info-bg: #ddf4ff;
-  --info-text: #0550ae;
-  --muted-bg: #eff2f5;
+  --danger: #c4242a;
+  --ok-bg: #e3f4ea;
+  --ok-text: #14532d;
+  --warn-bg: #fff6e0;
+  --warn-text: #92400e;
+  --info-bg: #fdf2f7;
+  --info-text: #6b1d3e;
+  --muted-bg: #f4eef0;
   --radius: 10px;
   font-family:
+    'DM Sans Variable',
     system-ui,
     -apple-system,
     'Segoe UI',
-    Roboto,
     sans-serif;
-  font-size: 16px;
-  line-height: 1.45;
+  font-size: 15px;
+  line-height: 1.5;
   background: var(--bg);
   color: var(--text);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #0d1117;
-    --surface: #161b22;
-    --text: #e6edf3;
-    --muted: #9198a1;
-    --border: #30363d;
-    --primary: #2f81f7;
-    --danger: #f85149;
-    --ok-bg: #12261e;
-    --ok-text: #3fb950;
-    --warn-bg: #272115;
-    --warn-text: #d29922;
-    --info-bg: #121d2f;
-    --info-text: #58a6ff;
-    --muted-bg: #21262d;
-  }
+  -webkit-font-smoothing: antialiased;
 }
 
 * {
@@ -56,11 +45,25 @@ body {
 }
 
 a {
-  color: var(--primary);
+  color: var(--primary-ink);
+  text-underline-offset: 3px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+table,
+.stat-value,
+.tab-count {
+  font-variant-numeric: tabular-nums;
 }
 
 h1 {
-  font-size: 1.5rem;
+  font-size: 1.75rem;
+  font-weight: 700;
+  letter-spacing: -0.02em;
   margin: 0;
 }
 
@@ -92,7 +95,7 @@ main.container {
 
 /* Header */
 .header {
-  background: var(--surface);
+  background: var(--bg);
   border-bottom: 1px solid var(--border);
   position: sticky;
   top: 0;
@@ -108,9 +111,21 @@ main.container {
 }
 
 .brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
   font-weight: 700;
   color: var(--text);
   text-decoration: none;
+}
+
+.brand::before {
+  content: '';
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 2px solid var(--primary);
+  background: var(--primary-soft);
 }
 
 .nav {
@@ -126,9 +141,20 @@ main.container {
   text-decoration: none;
 }
 
-.nav a.active {
-  background: var(--muted-bg);
+.nav a {
+  transition:
+    background-color 0.15s,
+    color 0.15s;
+}
+
+.nav a:hover {
+  background: var(--raised);
   color: var(--text);
+}
+
+.nav a.active {
+  background: var(--primary-soft);
+  color: var(--primary-ink);
   font-weight: 600;
 }
 
@@ -172,7 +198,7 @@ main.container {
   background: var(--surface);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 1rem 1.25rem;
+  padding: 1.25rem 1.5rem;
   margin-bottom: 1rem;
 }
 
@@ -343,8 +369,10 @@ a.list-item:hover {
   padding: 0.55rem 0.7rem;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: var(--bg);
+  background: var(--surface);
+  border-color: var(--control);
   color: var(--text);
+  transition: border-color 0.15s;
 }
 
 .input:focus {
@@ -385,8 +413,20 @@ a.list-item:hover {
   white-space: nowrap;
 }
 
+.button {
+  transition:
+    transform 0.12s ease,
+    background-color 0.15s,
+    border-color 0.15s;
+}
+
 .button:hover:not(:disabled) {
   background: var(--muted-bg);
+  border-color: var(--control);
+}
+
+.button:active:not(:disabled) {
+  transform: scale(0.98);
 }
 
 .button:disabled {
@@ -406,8 +446,8 @@ a.list-item:hover {
 }
 
 .button-primary:hover:not(:disabled) {
-  background: var(--primary);
-  filter: brightness(1.08);
+  background: var(--primary-ink);
+  border-color: var(--primary-ink);
 }
 
 .button-danger {
@@ -725,5 +765,14 @@ div.form-inline {
 
   .list-item .badges {
     justify-content: flex-start;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
   }
 }

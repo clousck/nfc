@@ -23,6 +23,19 @@ if (!scanner.includes(`'/vendor/jsqr-${version}.js'`)) {
 mkdirSync(dirname(target), { recursive: true });
 copyFileSync(join(dirname(jsqrPackage), 'dist', 'jsQR.js'), target);
 
+// Tipografía de todas las páginas (DM Sans variable, subconjunto latino). Mismo esquema: la
+// versión va en el nombre y debe coincidir con FONT_PATH (src/ui/theme.ts).
+const fontPackage = require.resolve('@fontsource-variable/dm-sans/package.json');
+const fontVersion = JSON.parse(readFileSync(fontPackage, 'utf8')).version;
+const theme = readFileSync(join(root, 'src', 'ui', 'theme.ts'), 'utf8');
+if (!theme.includes(`'/vendor/dm-sans-${fontVersion}.woff2'`)) {
+  throw new Error(`FONT_PATH en src/ui/theme.ts no apunta a dm-sans-${fontVersion}.woff2`);
+}
+copyFileSync(
+  join(dirname(fontPackage), 'files', 'dm-sans-latin-wght-normal.woff2'),
+  join(root, 'public', 'vendor', `dm-sans-${fontVersion}.woff2`),
+);
+
 // Cabeceras de los estáticos: el nombre lleva la versión, así que se cachean un año.
 writeFileSync(
   join(root, 'public', '_headers'),

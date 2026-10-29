@@ -24,4 +24,4 @@ export function pageHeaders(csp: string): Record<string, string> {
 }
 
 export const STRICT_CSP =
-  "default-src 'none'; style-src 'unsafe-inline'; img-src data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";
+  "default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; img-src data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'";

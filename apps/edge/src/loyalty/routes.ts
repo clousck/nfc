@@ -363,7 +363,7 @@ loyaltyRoutes.get('/l/canje/:code', async (c) => {
     }),
     {
       headers: pageHeaders(
-        `default-src 'none'; style-src 'unsafe-inline'; script-src 'nonce-${nonce}'; connect-src 'self'; img-src data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`,
+        `default-src 'none'; style-src 'unsafe-inline'; font-src 'self'; script-src 'nonce-${nonce}'; connect-src 'self'; img-src data:; form-action 'self'; frame-ancestors 'none'; base-uri 'none'`,
       ),
     },
   );

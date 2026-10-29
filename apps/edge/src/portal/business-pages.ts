@@ -64,12 +64,33 @@ function flash(code: FlashCode | null): string {
   return `<p class="${ok ? 'ok' : 'alert'}" role="status">${esc(text)}</p>`;
 }
 
-function nav(business: PortalBusiness, session: PortalSession, loyalty: boolean): string {
+type NavKey = 'chips' | 'qr' | 'estadisticas' | 'personal' | 'actividad';
+
+function nav(
+  business: PortalBusiness,
+  session: PortalSession,
+  loyalty: boolean,
+  current: NavKey,
+): string {
   const base = `/n/${esc(business.id)}`;
-  const back = session.businesses.length > 1 ? `<a href="/">← Tus negocios</a> · ` : '';
-  return `<p class="small">${back}<a href="${base}">Chips</a> · <a href="${base}/estadisticas">Estadísticas</a>${
-    loyalty ? ` · <a href="${base}/contactos.csv">Contactos (CSV)</a>` : ''
-  } · <a href="${base}/personal">Personal</a> · <a href="${base}/actividad">Actividad</a></p>`;
+  const items: [NavKey | null, string, string][] = [
+    ['chips', base, 'Chips'],
+    ...(loyalty ? [['qr', `${base}/qr`, 'QR del día'] as [NavKey, string, string]] : []),
+    ['estadisticas', `${base}/estadisticas`, 'Estadísticas'],
+    ['personal', `${base}/personal`, 'Personal'],
+    ['actividad', `${base}/actividad`, 'Actividad'],
+    ...(loyalty
+      ? [[null, `${base}/contactos.csv`, 'Contactos (CSV)'] as [null, string, string]]
+      : []),
+  ];
+  const links = items
+    .map(
+      ([key, href, label]) =>
+        `<a href="${href}"${key === current ? ' aria-current="page"' : ''}>${label}</a>`,
+    )
+    .join('');
+  const back = session.businesses.length > 1 ? `<a class="back" href="/">Tus negocios</a>` : '';
+  return `${back}<p class="biz">${esc(business.name)}</p><nav class="tabs" aria-label="Secciones">${links}</nav>`;
 }
 
 function status(tag: ProjectedTag): string {
@@ -156,8 +177,8 @@ export function businessPage(input: {
       : input.tags.map((t) => chipCard(business.id, t)).join('\n');
   return layout(
     business.name,
-    `${nav(business, session, input.loyaltyVisits !== null)}
-<h1>${esc(business.name)}</h1>
+    `${nav(business, session, input.loyaltyVisits !== null, 'chips')}
+<h1>Chips</h1>
 ${flash(input.flash)}
 ${paused}
 ${rewardSection(business.id, input.loyaltyVisits, input.loyalty)}
@@ -236,7 +257,7 @@ export function activityPage(input: {
           .join('')}</ul>`;
   return layout(
     `Actividad · ${input.business.name}`,
-    `${nav(input.business, input.session, input.loyalty)}
+    `${nav(input.business, input.session, input.loyalty, 'actividad')}
 <h1>Actividad</h1>
 <section class="card">
   <p class="small muted">Cada cambio en la configuración de tu negocio queda registrado: quién lo hizo, qué cambió y cuándo. Se guarda un año.</p>
@@ -277,7 +298,7 @@ export function staffPage(input: {
           .join('')}</ul>`;
   return layout(
     `Personal · ${input.business.name}`,
-    `${nav(input.business, input.session, input.loyalty)}
+    `${nav(input.business, input.session, input.loyalty, 'personal')}
 <h1>Personal</h1>
 ${flash(input.flash)}
 <section class="card">
@@ -307,7 +328,7 @@ export function pairingPage(input: {
 }): string {
   return layout(
     `Vincular móvil · ${input.business.name}`,
-    `${nav(input.business, input.session, input.loyalty)}
+    `${nav(input.business, input.session, input.loyalty, 'personal')}
 <h1>Vincular «${esc(input.label)}»</h1>
 <section class="card">
   <p>Con el móvil del local, escanea este QR con la cámara (o abre el enlace) y pulsa <strong>Vincular este móvil</strong>.</p>
