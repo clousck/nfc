@@ -30,6 +30,7 @@ import {
 import {
   activityPage,
   businessPage,
+  chipsPage,
   isFlashCode,
   pairingPage,
   qrPage,
@@ -37,6 +38,7 @@ import {
   type FlashCode,
 } from './business-pages.js';
 import { mailSender } from './mail.js';
+import { todayVisits } from './today.js';
 import { messagePage } from './pages.js';
 import type { PortalBusiness, PortalSession } from './session.js';
 
@@ -85,11 +87,23 @@ businessRoutes.use('*', async (c, next) => {
 
 businessRoutes.get('/', async (c) => {
   const business = c.get('business');
-  const [tags, state] = await Promise.all([
+  const now = Date.now();
+  const [tags, state, recent] = await Promise.all([
     businessTags(c.env.DB, business.id),
     businessState(c.env.DB, business.id),
+    listAudit(c.env.DB, business.id, 4),
   ]);
   const visits = state?.loyaltyVisits ?? null;
+  const [summary, today] = await Promise.all([
+    visits === null ? null : loyaltySummary(c.env.DB, business.id, now),
+    todayVisits(c.env.DB, {
+      businessId: business.id,
+      tags,
+      loyalty: visits !== null,
+      now,
+      offsetMinutes: offset(c.env),
+    }),
+  ]);
   const m = c.req.query('m');
   return html(
     businessPage({
@@ -97,7 +111,28 @@ businessRoutes.get('/', async (c) => {
       business,
       tags,
       loyaltyVisits: visits,
-      loyalty: visits === null ? null : await loyaltySummary(c.env.DB, business.id, Date.now()),
+      loyalty: summary,
+      today,
+      recent,
+      now,
+      flash: isFlashCode(m) ? m : null,
+    }),
+  );
+});
+
+businessRoutes.get('/chips', async (c) => {
+  const business = c.get('business');
+  const [tags, state] = await Promise.all([
+    businessTags(c.env.DB, business.id),
+    businessState(c.env.DB, business.id),
+  ]);
+  const m = c.req.query('m');
+  return html(
+    chipsPage({
+      session: c.get('session'),
+      business,
+      tags,
+      loyalty: (state?.loyaltyVisits ?? null) !== null,
       flash: isFlashCode(m) ? m : null,
     }),
   );
@@ -117,7 +152,7 @@ businessRoutes.post('/chips/:slug', async (c) => {
       patch.targetUrl = null;
     } else {
       const url = TargetUrl.safeParse(raw);
-      if (!url.success) return back(business.id, 'url_invalida');
+      if (!url.success) return back(business.id, 'url_invalida', '/chips');
       patch.targetUrl = url.data;
     }
   }
@@ -126,7 +161,7 @@ businessRoutes.post('/chips/:slug', async (c) => {
     (t) => t.slug === c.req.param('slug'),
   );
   if (tag?.type === 'redirect' && patch.targetUrl === null) {
-    return back(business.id, 'falta_destino');
+    return back(business.id, 'falta_destino', '/chips');
   }
   const result = await putTagSettings(
     c.env,
@@ -139,7 +174,7 @@ businessRoutes.post('/chips/:slug', async (c) => {
   if (!result.ok) {
     return html(messagePage('Chip no encontrado', 'Este chip no es de tu negocio.'), 404);
   }
-  return back(business.id, result.publish.applied ? 'guardado' : 'sin_cambios');
+  return back(business.id, result.publish.applied ? 'guardado' : 'sin_cambios', '/chips');
 });
 
 /** "Stand perdido o dañado": pausa el chip (no lo libera) y avisa al admin. */
@@ -167,7 +202,7 @@ businessRoutes.post('/chips/:slug/pausa', async (c) => {
       ),
     );
   }
-  return back(business.id, pause ? 'pausado' : 'reactivado');
+  return back(business.id, pause ? 'pausado' : 'reactivado', '/chips');
 });
 
 async function notifyLostStand(

@@ -73,6 +73,7 @@ a{color:var(--accent-ink);text-underline-offset:3px;text-decoration-thickness:1p
 .rows{list-style:none;margin:0;padding:0}
 .rows>li{padding:12px 0;border-top:1px solid var(--rule)}
 .rows>li:first-child{border-top:0}
+.panel.rows{padding:4px 20px}
 .qr-plate{background:#fff;border-radius:12px;padding:14px;border:1px solid var(--border)}
 .qr-plate svg{display:block;width:100%;height:auto}
 details>summary{cursor:pointer;list-style:none}

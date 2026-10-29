@@ -44,6 +44,21 @@ async function audit() {
 }
 
 describe('portal: chips del dueño', () => {
+  it('la portada es "Hoy": la franja del día y el enlace a editar los chips', async () => {
+    const text = await (await portal('GET', `/n/${BIZ}`, { cookie })).text();
+    expect(text).toContain('Hoy en el local');
+    expect(text).toContain('class="strip"');
+    expect(text).toContain(`href="/n/${BIZ}/chips"`);
+  });
+
+  it('la página de chips tiene el formulario de cada chip', async () => {
+    const res = await portal('GET', `/n/${BIZ}/chips`, { cookie });
+    const text = await res.text();
+    expect(res.status).toBe(200);
+    expect(text).toContain(`action="/n/${BIZ}/chips/`);
+    expect(text).not.toContain('Chip #3');
+  });
+
   it('muestra sus chips y no los de otro negocio', async () => {
     const text = await (await portal('GET', `/n/${BIZ}`, { cookie })).text();
     expect(text).toContain('Chip #1');
@@ -54,7 +69,7 @@ describe('portal: chips del dueño', () => {
   it('cambia destino y etiqueta: se publica y queda en la auditoría como dueño', async () => {
     const res = await post('/chips/aaaaaaa', { etiqueta: 'Barra', destino: 'https://menu.ec' });
     expect(res.status).toBe(303);
-    expect(res.headers.get('location')).toBe(`/n/${BIZ}?m=guardado`);
+    expect(res.headers.get('location')).toBe(`/n/${BIZ}/chips?m=guardado`);
     expect(await kv('aaaaaaa')).toMatchObject({ url: 'https://menu.ec' });
 
     const entry = (await audit()).find((e) => e.action === 'tag.settings');
@@ -67,17 +82,17 @@ describe('portal: chips del dueño', () => {
 
   it('rechaza destinos que no son https y quitar el destino de una redirección', async () => {
     const http = await post('/chips/aaaaaaa', { etiqueta: '', destino: 'http://menu.ec' });
-    expect(http.headers.get('location')).toBe(`/n/${BIZ}?m=url_invalida`);
+    expect(http.headers.get('location')).toBe(`/n/${BIZ}/chips?m=url_invalida`);
     const js = await post('/chips/aaaaaaa', { etiqueta: '', destino: 'javascript:alert(1)' });
-    expect(js.headers.get('location')).toBe(`/n/${BIZ}?m=url_invalida`);
+    expect(js.headers.get('location')).toBe(`/n/${BIZ}/chips?m=url_invalida`);
     const empty = await post('/chips/aaaaaaa', { etiqueta: '', destino: '' });
-    expect(empty.headers.get('location')).toBe(`/n/${BIZ}?m=falta_destino`);
+    expect(empty.headers.get('location')).toBe(`/n/${BIZ}/chips?m=falta_destino`);
     expect(await kv('aaaaaaa')).toMatchObject({ url: 'https://x.ec' });
   });
 
   it('el chip de fidelidad puede quedar sin enlace de continuación', async () => {
     const res = await post('/chips/fidel01', { etiqueta: 'Puerta', destino: '' });
-    expect(res.headers.get('location')).toBe(`/n/${BIZ}?m=guardado`);
+    expect(res.headers.get('location')).toBe(`/n/${BIZ}/chips?m=guardado`);
   });
 
   it('no puede tocar el chip de otro negocio (ni siquiera saber que existe)', async () => {
@@ -98,7 +113,7 @@ describe('portal: stand perdido', () => {
   it('pausa el chip, avisa al admin una sola vez y se puede reactivar', async () => {
     const before = mails.length;
     const res = await post('/chips/aaaaaaa/pausa', { accion: 'pausar' });
-    expect(res.headers.get('location')).toBe(`/n/${BIZ}?m=pausado`);
+    expect(res.headers.get('location')).toBe(`/n/${BIZ}/chips?m=pausado`);
     expect(await kv('aaaaaaa')).toMatchObject({ active: false });
 
     const notices = mails.slice(before);
