@@ -776,3 +776,55 @@ div.form-inline {
     transition: none !important;
   }
 }
+
+/* Escritorio: la cabecera pasa a ser una barra lateral fija; el contenido usa el ancho libre. */
+@media (min-width: 1000px) {
+  .header {
+    position: fixed;
+    inset: 0 auto 0 0;
+    width: 240px;
+    border-bottom: 0;
+    border-right: 1px solid var(--border);
+  }
+
+  .header-inner {
+    max-width: none;
+    height: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    flex-wrap: nowrap;
+    gap: 8px;
+    padding: 24px 16px;
+  }
+
+  .header-inner .brand {
+    padding: 0 8px 20px;
+    font-size: 1.0625rem;
+  }
+
+  .nav {
+    flex: 1;
+    flex-direction: column;
+    gap: 2px;
+  }
+
+  .nav a {
+    padding: 8px 12px;
+    font-weight: 500;
+  }
+
+  .goto .input {
+    width: 100%;
+  }
+
+  main.container {
+    max-width: 1120px;
+    margin-left: 240px;
+    padding: 40px 56px 80px;
+  }
+
+  .page-title h1 {
+    font-size: 2.25rem;
+    letter-spacing: -0.03em;
+  }
+}
