@@ -18,6 +18,7 @@ export default defineConfig(async () => {
           bindings: {
             TEST_MIGRATIONS: migrations,
             INTERNAL_API_TOKEN: 'test-internal-token-0123456789abcdef',
+            PRESENCE_MASTER_KEY: 'test-presence-master-key-0123456789abcdef',
           },
         },
       }),

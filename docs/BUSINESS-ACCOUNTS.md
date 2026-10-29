@@ -328,7 +328,7 @@ Cada fase se entrega en commits separados, con los tests pasando y sin desplegar
 | 2 ✅ | Worker dueño de D1 y único escritor de KV: API interna, tablas de copia, cola de la Pi → API interna, `db.batch`, la Pi sin token de Cloudflare | 2, 3           |
 | 3 ✅ | Rate limiting en modo observación + registro de incidentes + vista en el panel                                                                  | 4a             |
 | 4 ✅ | Cuentas: enlace mágico, portal, permisos, auditoría, dispositivos del personal (límite 3×), fin de la validación con el enlace de estadísticas  | 4b             |
-| 5    | Módulo de presencia: `static_nfc` (actual) + `rotating_qr`; la fidelidad acepta el QR rotativo                                                  | —              |
+| 5 ✅ | Módulo de presencia: `static_nfc` (actual) + `rotating_qr`; la fidelidad acepta el QR rotativo                                                  | —              |
 | 6    | `ntag_sun` cuando haya chips NTAG 424/413 DNA; `nfc_counter` opcional                                                                           | —              |
 | 7    | Revisar incidentes y pasar el rate limiting a `enforce`                                                                                         | 4a             |
 
@@ -336,6 +336,23 @@ Cada fase se entrega en commits separados, con los tests pasando y sin desplegar
 fase 4 (no hay un segundo escritor hasta que exista el portal). `/internal/*` se protege solo con
 `INTERNAL_API_TOKEN`; una capa extra de Cloudflare Access con _service token_ puede añadirse después
 sin cambiar el código.
+
+### Fase 5 — implementada (2026-10-29)
+
+- `src/presence/index.ts`: verificadores `staticNfc` (débil) y `rotatingQr` (fuerte), pase de
+  presencia firmado (`nfc_presence`, 10 min, solo en `/c/registro/`).
+- `GET /c/<businessId>.<ventana>.<firma>`: con tarjeta suma el sello del día; sin tarjeta muestra el
+  alta y el primer sello llega con el pase. Sellos con `slug = 'qr'` y `presence_method`.
+- Pantallas del QR: portal `/n/<id>/qr` ("QR del día") y móvil vinculado `go…/v/qr`. Sin
+  JavaScript: `<meta http-equiv="refresh" content="20">`.
+- "Cambiar la clave del QR" (portal) sube `business_settings.qr_key_version` y queda en la
+  auditoría (`qr.rotated`).
+- Migración `0006_presence.sql`. Secreto nuevo **`PRESENCE_MASTER_KEY`** (32+ bytes aleatorios):
+  sin él las pantallas dicen "aún no disponible" y `/c/*` responde "QR no válido".
+- **Desviación del diseño:** el chip NFC estático **sigue sumando sellos**. Exigir `strong` solo
+  para fidelidad dejaría sin sellar a los negocios con NTAG 213 y sin pantalla en el mostrador, y la
+  evaluación comercial (2026-10-29) marca la fricción del cliente como riesgo principal. Exigirlo
+  por negocio queda pendiente hasta tener datos de fraude reales (`presence_method` ya se guarda).
 
 ## 9. Decisiones adicionales (2026-10-24)
 

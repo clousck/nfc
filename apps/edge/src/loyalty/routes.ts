@@ -13,6 +13,16 @@ import { pageHeaders, STRICT_CSP } from '../html.js';
 import { allowRequest, clientIp } from '../rate-limit.js';
 import { scannerCsp } from './scanner.js';
 import {
+  CHECKIN_PATH,
+  PRESENCE_PASS_COOKIE,
+  PRESENCE_PASS_MS,
+  presencePass,
+  rotatingQr,
+  rotatingQrToken,
+  verifyPresencePass,
+  type PresenceMethod,
+} from '../presence/index.js';
+import {
   cardPage,
   colorOfDay,
   deleteConfirmPage,
@@ -25,6 +35,7 @@ import {
   redemptionPage,
   signupPage,
   staffHomePage,
+  staffQrPage,
   validationPage,
   type CardMessage,
   type ValidationOutcome,
@@ -41,6 +52,7 @@ import {
 import {
   completePairing,
   pendingPairing,
+  publicOrigin,
   readStaffDevice,
   STAFF_COOKIE,
   staffCookie,
@@ -54,6 +66,7 @@ import {
   findPendingRedemption,
   findRedemption,
   localDay,
+  qrKeyVersion,
   redeem,
   validateRedemption,
 } from './store.js';
@@ -62,6 +75,8 @@ type AppContext = Context<{ Bindings: Env }>;
 type LoyaltyLink = Extract<LinkRecord, { type: 'loyalty' }>;
 
 const DAY_MS = 86_400_000;
+/** "Chip" con el que se registran los sellos del QR rotativo (loyalty_stamps.slug). */
+export const QR_STAMP_SLUG = 'qr';
 
 function offset(env: Env): number {
   return Number(env.REPORT_TZ_OFFSET_MINUTES ?? '-300');
@@ -151,6 +166,7 @@ export async function handleLoyaltyTap(
   if (source === 'nfc') {
     const stamped = await addStamp(c.env.DB, card, {
       slug,
+      method: 'static_nfc',
       visitsRequired: visits,
       now,
       offsetMinutes: offset(c.env),
@@ -191,14 +207,128 @@ loyaltyRoutes.post('/l/:slug/registro', async (c) => {
   const link = await loadLoyaltyLink(c.env.LINKS, slug);
   const business = link ? await loadBusiness(c.env.LINKS, link.businessId) : null;
   if (!link || !business?.loyaltyVisits) return notAvailable();
-
   const form = await c.req.formData();
+  const source = form.get('fuente') === 'qr' ? 'qr' : 'nfc';
+  return signup(c, form, {
+    businessId: link.businessId,
+    business,
+    slug,
+    source,
+    // El QR fijo del chip (?s=q) muestra la tarjeta pero no prueba presencia: sin sello.
+    firstStamp: source === 'nfc' ? { slug, method: 'static_nfc' } : null,
+  });
+});
+
+/**
+ * QR rotativo del local (fase 5): prueba fuerte de presencia. Con tarjeta suma el sello del día;
+ * sin tarjeta emite un pase de presencia de 10 minutos y muestra el alta.
+ */
+loyaltyRoutes.get(`${CHECKIN_PATH}/:token`, async (c) => {
+  const now = Date.now();
+  const proof = await rotatingQr.verify(
+    { token: c.req.param('token') },
+    {
+      masterKey: c.env.PRESENCE_MASTER_KEY,
+      qrKeyVersion: async (businessId) => {
+        const business = await loadBusiness(c.env.LINKS, businessId);
+        return business?.loyaltyVisits ? qrKeyVersion(c.env.DB, businessId) : null;
+      },
+    },
+    now,
+  );
+  if (!proof.proven) {
+    return html(
+      messagePage(
+        proof.reason === 'expired' ? 'Este QR ya caducó' : 'QR no válido',
+        'El QR del local cambia cada minuto. Escanea el que se ve ahora en su pantalla.',
+      ),
+      proof.reason === 'expired' ? 410 : 404,
+    );
+  }
+  const businessId = proof.businessId;
+  const business = (await loadBusiness(c.env.LINKS, businessId))!;
+  const visits = business.loyaltyVisits!;
+  const card = await currentCard(c, businessId);
+  if (!card) {
+    const pass = await presencePass(c.env.PRESENCE_MASTER_KEY!, businessId, now);
+    return html(
+      signupPage({
+        businessId,
+        businessName: business.name,
+        visits,
+        slug: '',
+        action: `${CHECKIN_PATH}/registro/${businessId}`,
+        source: 'qr',
+      }),
+      200,
+      {
+        'set-cookie': `${PRESENCE_PASS_COOKIE}=${encodeURIComponent(pass)}; Max-Age=${PRESENCE_PASS_MS / 1000}; Path=${CHECKIN_PATH}/registro/; HttpOnly; Secure; SameSite=Lax`,
+      },
+    );
+  }
+  const stamped = await addStamp(c.env.DB, card, {
+    slug: QR_STAMP_SLUG,
+    method: proof.method,
+    visitsRequired: visits,
+    now,
+    offsetMinutes: offset(c.env),
+  });
+  const pending = await findPendingRedemption(c.env.DB, card.id, now - DAY_MS);
+  return html(
+    cardPage({
+      businessId,
+      businessName: business.name,
+      customerName: stamped.card.name,
+      visits,
+      stamps: effectiveStamps(stamped.card, now),
+      message: stamped.result,
+      continueUrl: null,
+      pendingCode: pending?.code ?? null,
+    }),
+    200,
+    { 'set-cookie': cookieHeader(DEVICE_COOKIE, readDeviceToken(c.req.raw)!) },
+  );
+});
+
+/** Alta desde el QR rotativo: el pase de presencia (10 min) da el primer sello. */
+loyaltyRoutes.post(`${CHECKIN_PATH}/registro/:businessId`, async (c) => {
+  const businessId = c.req.param('businessId');
+  const business = await loadBusiness(c.env.LINKS, businessId);
+  if (!business?.loyaltyVisits) return notAvailable();
+  const form = await c.req.formData();
+  const present = await verifyPresencePass(
+    c.env.PRESENCE_MASTER_KEY,
+    readCookie(c.req.raw, PRESENCE_PASS_COOKIE),
+    businessId,
+    Date.now(),
+  );
+  return signup(c, form, {
+    businessId,
+    business,
+    slug: null,
+    source: 'qr',
+    firstStamp: present ? { slug: QR_STAMP_SLUG, method: 'rotating_qr' } : null,
+  });
+});
+
+async function signup(
+  c: AppContext,
+  form: FormData,
+  target: {
+    businessId: string;
+    business: BusinessRecord;
+    slug: string | null;
+    source: 'nfc' | 'qr';
+    firstStamp: { slug: string; method: PresenceMethod } | null;
+  },
+): Promise<Response> {
+  const { business, slug, source } = target;
+  const link = { businessId: target.businessId };
   const name = String(form.get('nombre') ?? '')
     .replace(/[\p{C}<>]/gu, '')
     .trim()
     .slice(0, 60);
   const phoneInput = String(form.get('telefono') ?? '');
-  const source = form.get('fuente') === 'qr' ? 'qr' : 'nfc';
   const values = { name, phone: phoneInput };
   const retry = (error: string) =>
     html(
@@ -206,7 +336,8 @@ loyaltyRoutes.post('/l/:slug/registro', async (c) => {
         businessId: link.businessId,
         businessName: business.name,
         visits: business.loyaltyVisits!,
-        slug,
+        slug: slug ?? '',
+        action: slug ? undefined : `${CHECKIN_PATH}/registro/${target.businessId}`,
         source,
         error,
         values,
@@ -259,7 +390,7 @@ loyaltyRoutes.post('/l/:slug/registro', async (c) => {
     name,
     phone,
     marketing: form.get('promos') === 'on',
-    firstStamp: source === 'nfc' ? { slug } : null,
+    firstStamp: target.firstStamp,
     now: Date.now(),
     offsetMinutes: offset(c.env),
   });
@@ -269,7 +400,7 @@ loyaltyRoutes.post('/l/:slug/registro', async (c) => {
     );
   }
   return redirect(`/l/tarjeta/${link.businessId}?bienvenida=1`, cookie);
-});
+}
 
 loyaltyRoutes.get('/l/tarjeta/:businessId', async (c) => {
   const businessId = c.req.param('businessId');
@@ -384,6 +515,28 @@ loyaltyRoutes.get('/l/canje/:code/estado', async (c) => {
 });
 
 /** El cajero escanea el QR del cliente con la cámara: abre esta URL en su móvil vinculado. */
+/** QR rotativo en un móvil vinculado del local (antes de /v/:code para que no lo tome como código). */
+loyaltyRoutes.get('/v/qr', async (c) => {
+  const device = await readStaffDevice(c.env, c.req.raw, c.executionCtx);
+  if (!device) return html(validationPage(null, { kind: 'not_staff' }));
+  const business = await loadBusiness(c.env.LINKS, device.businessId);
+  if (!business?.loyaltyVisits) return notAvailable();
+  const key = c.env.PRESENCE_MASTER_KEY;
+  const url = key
+    ? `${publicOrigin(c.env)}${CHECKIN_PATH}/${
+        (
+          await rotatingQrToken(
+            key,
+            device.businessId,
+            await qrKeyVersion(c.env.DB, device.businessId),
+            Date.now(),
+          )
+        ).token
+      }`
+    : null;
+  return html(staffQrPage({ businessName: device.businessName, url }));
+});
+
 loyaltyRoutes.get('/v/:code', async (c) => {
   const device = await readStaffDevice(c.env, c.req.raw, c.executionCtx);
   // El personal (móvil vinculado) tiene 3× el límite público.

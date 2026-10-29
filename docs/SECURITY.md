@@ -216,3 +216,13 @@ enlace de estadísticas sin credencial nunca muestra nombres ni teléfonos.
 - ¿La acción nueva escribe datos o se puede adivinar? → rate limiting.
 - ¿Se guarda algún dato personal nuevo? → consentimiento y retención.
 - ¿Un secreto nuevo? → añadirlo a la sección 6.
+
+## Fase 5 — QR rotativo (2026-10-29)
+
+- Secreto `PRESENCE_MASTER_KEY` (Worker, `wrangler secret put`). Las claves de cada negocio se derivan
+  con HKDF (`qr:<businessId>:v<versión>`); no se guarda ninguna clave en D1.
+- Firma HMAC-SHA256 truncada a 16 bytes, comparada en tiempo constante. Se aceptan la ventana de
+  60 s actual y la vecina: una foto del QR sirve como mucho ~2 minutos (riesgo aceptado, §8). El
+  dueño puede invalidar todos los QR al instante subiendo la versión de la clave.
+- El pase de presencia (`nfc_presence`) es `HttpOnly`, `Secure`, `SameSite=Lax`, limitado a
+  `/c/registro/` y caduca a los 10 minutos.

@@ -1,4 +1,5 @@
 import { generateRedemptionCode, LOYALTY_EXPIRY_DAYS } from '@nfc/shared';
+import type { PresenceMethod } from '../presence/index.js';
 
 const DAY_MS = 86_400_000;
 const EXPIRY_MS = LOYALTY_EXPIRY_DAYS * DAY_MS;
@@ -78,7 +79,7 @@ export async function createCard(
     name: string;
     phone: string;
     marketing: boolean;
-    firstStamp: { slug: string } | null;
+    firstStamp: { slug: string; method: PresenceMethod } | null;
     now: number;
     offsetMinutes: number;
   },
@@ -110,8 +111,10 @@ export async function createCard(
     if (!row) throw new Error('No se pudo crear la tarjeta');
     if (input.firstStamp) {
       await db
-        .prepare('INSERT INTO loyalty_stamps (card_id, business_id, slug, ts) VALUES (?, ?, ?, ?)')
-        .bind(row.id, input.businessId, input.firstStamp.slug, now)
+        .prepare(
+          'INSERT INTO loyalty_stamps (card_id, business_id, slug, ts, presence_method) VALUES (?, ?, ?, ?, ?)',
+        )
+        .bind(row.id, input.businessId, input.firstStamp.slug, now, input.firstStamp.method)
         .run();
     }
     return { ok: true, card: toCard(row) };
@@ -129,7 +132,13 @@ export type StampResult = 'added' | 'already_today' | 'reward_ready';
 export async function addStamp(
   db: D1Database,
   card: Card,
-  input: { slug: string; visitsRequired: number; now: number; offsetMinutes: number },
+  input: {
+    slug: string;
+    method: PresenceMethod;
+    visitsRequired: number;
+    now: number;
+    offsetMinutes: number;
+  },
 ): Promise<{ result: StampResult; card: Card }> {
   const { now, visitsRequired } = input;
   const today = localDay(now, input.offsetMinutes);
@@ -151,8 +160,10 @@ export async function addStamp(
   ]);
   if (!update?.meta.changes) return { result: 'already_today', card };
   await db
-    .prepare('INSERT INTO loyalty_stamps (card_id, business_id, slug, ts) VALUES (?, ?, ?, ?)')
-    .bind(card.id, card.businessId, input.slug, now)
+    .prepare(
+      'INSERT INTO loyalty_stamps (card_id, business_id, slug, ts, presence_method) VALUES (?, ?, ?, ?, ?)',
+    )
+    .bind(card.id, card.businessId, input.slug, now, input.method)
     .run();
   return {
     result: 'added',
@@ -314,4 +325,30 @@ export async function loyaltySummary(
     redemptions30: Number(r?.['n'] ?? 0),
     validated30: Number(r?.['validated'] ?? 0),
   };
+}
+
+/** Versión de la clave del QR rotativo del negocio (1 si aún no tiene ajustes). */
+export async function qrKeyVersion(db: D1Database, businessId: string): Promise<number> {
+  const row = await db
+    .prepare('SELECT qr_key_version AS v FROM business_settings WHERE business_id = ?')
+    .bind(businessId)
+    .first<{ v: number }>();
+  return row?.v ?? 1;
+}
+
+/** Invalida todos los QR rotativos del negocio (p. ej. si circula una foto). */
+export async function rotateQrKey(
+  db: D1Database,
+  businessId: string,
+  now: number,
+): Promise<number | null> {
+  // Solo UPDATE: una fila nueva con loyalty_visits NULL desactivaría la fidelidad.
+  const row = await db
+    .prepare(
+      `UPDATE business_settings SET qr_key_version = qr_key_version + 1, updated_at = ?
+       WHERE business_id = ? RETURNING qr_key_version AS v`,
+    )
+    .bind(now, businessId)
+    .first<{ v: number }>();
+  return row?.v ?? null;
 }

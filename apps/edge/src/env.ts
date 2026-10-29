@@ -24,6 +24,8 @@ export interface Env {
   ADMIN_NOTIFY_EMAIL?: string;
   /** Origen público de los chips (enlaces de vinculación). Por defecto https://go.penginexr.com. */
   PUBLIC_ORIGIN?: string;
+  /** Clave maestra de la prueba de presencia (QR rotativo; wrangler secret). Sin ella, no hay QR. */
+  PRESENCE_MASTER_KEY?: string;
   /** Solo desarrollo (.dev.vars): sin RESEND_API_KEY, escribe el correo en la consola. */
   MAIL_DEV_LOG?: string;
 }

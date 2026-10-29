@@ -81,6 +81,8 @@ export function signupPage(input: {
   businessName: string;
   visits: number;
   slug: string;
+  /** Destino del formulario si no es el del chip (alta desde el QR rotativo). */
+  action?: string;
   source: 'nfc' | 'qr';
   error?: string;
   values?: { name?: string; phone?: string };
@@ -101,9 +103,9 @@ export function signupPage(input: {
 
 <section class="card">
   <h2>Crea tu tarjeta</h2>
-  <p class="muted">Solo la primera vez. Después, cada vez que acerques tu móvil al stand sumas un sello.</p>
+  <p class="muted">Solo la primera vez. Después, en cada visita sumas un sello acercando tu móvil al stand o escaneando el QR del local.</p>
   ${input.error ? `<p class="alert">${esc(input.error)}</p>` : ''}
-  <form method="post" action="/l/${esc(input.slug)}/registro" class="form">
+  <form method="post" action="${esc(input.action ?? `/l/${input.slug}/registro`)}" class="form">
     <input type="hidden" name="fuente" value="${input.source}">
     <label>Tu nombre
       <input name="nombre" required minlength="2" maxlength="60" autocomplete="given-name" value="${esc(input.values?.name ?? '')}">
@@ -119,7 +121,7 @@ export function signupPage(input: {
       <input type="checkbox" name="promos">
       <span>Acepto que ${esc(name)} me contacte con promociones (opcional).</span>
     </label>
-    <button type="submit" class="btn btn-primary">Crear mi tarjeta${input.source === 'nfc' ? ' y sumar mi primer sello' : ''}</button>
+    <button type="submit" class="btn btn-primary">Crear mi tarjeta${input.source === 'nfc' || input.action ? ' y sumar mi primer sello' : ''}</button>
   </form>
 </section>`;
   return layout(`${name} · Tarjeta de fidelidad`, body);
@@ -382,8 +384,23 @@ export function staffHomePage(input: {
   </form>
   <p class="muted small">Color de hoy: <strong>${esc(input.color.name)}</strong>. La pantalla de canje del cliente tiene este color y un reloj con segundos: una captura de pantalla no lo tiene.</p>
 </section>
+<a class="btn" href="/v/qr">Mostrar el QR del día</a>
 ${scannerScript(input.nonce, input.autostart)}`;
   return layout('Validar canjes', body, `<style>${SCANNER_STYLES}</style>`);
+}
+
+/** El QR rotativo en el móvil o la tablet del local (personal vinculado). */
+export function staffQrPage(input: { businessName: string; url: string | null }): string {
+  const body = input.url
+    ? `<section class="card qr-stage">
+  <p class="eyebrow">${esc(input.businessName)}</p>
+  <h1>QR del día</h1>
+  <p class="muted">Los clientes lo escanean con la cámara para sumar su sello. Cambia solo cada minuto.</p>
+  <div class="qr qr-big">${qrSvg(input.url)}</div>
+</section>
+<a class="btn" href="/v">Volver a validar canjes</a>`
+    : `<section class="card"><h1>QR del día</h1><p class="alert">Aún no está disponible. Avisa a tu proveedor.</p></section>`;
+  return layout('QR del día', body, input.url ? '<meta http-equiv="refresh" content="20">' : '');
 }
 
 export function pairingConfirmPage(input: {
@@ -511,4 +528,6 @@ form .btn{margin-top:6px}
 .big{font-size:1.25rem;font-weight:600}
 .prose p{font-size:.9375rem}
 .prose h2{margin-top:18px}
+.qr-stage{text-align:center}
+.qr-big{width:min(86vw,360px);border-color:var(--accent);animation:none}
 `;

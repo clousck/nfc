@@ -34,6 +34,7 @@ export const FLASH = {
     text: 'Chip pausado. Ya avisamos a tu proveedor para reponer o revisar el stand.',
   },
   reactivado: { ok: true, text: 'Chip reactivado.' },
+  qr_rotado: { ok: true, text: 'Clave cambiada: los QR anteriores y sus fotos ya no sirven.' },
   premio: { ok: true, text: 'Visitas del premio guardadas.' },
   url_invalida: { ok: false, text: 'El destino debe ser una dirección https:// válida.' },
   falta_destino: { ok: false, text: 'Este chip necesita un destino para funcionar.' },
@@ -226,6 +227,8 @@ function describe(entry: AuditView): string {
       return `Quitó el acceso al portal a ${esc(show(before['email']))}`;
     case 'staff.paired':
       return `Vinculó el móvil «${esc(show(after['label']))}» para validar canjes`;
+    case 'qr.rotated':
+      return 'Cambió la clave del QR del día (los QR anteriores dejaron de servir)';
     case 'staff.revoked':
       return `Desvinculó el móvil «${esc(show(before['label']))}»`;
     case 'contacts.exported':
@@ -338,5 +341,40 @@ export function pairingPage(input: {
   <a class="btn" href="/n/${esc(input.business.id)}/personal">Listo</a>
 </section>`,
     input.session,
+  );
+}
+
+/** Segundos entre recargas de la pantalla del QR (la ventana es de 60 s; se aceptan 2). */
+export const QR_REFRESH_SECONDS = 20;
+
+export function qrPage(input: {
+  session: PortalSession;
+  business: PortalBusiness;
+  url: string | null;
+  flash: FlashCode | null;
+}): string {
+  const id = esc(input.business.id);
+  const body = input.url
+    ? `<section class="card qr-stage">
+  <p>Deja esta pantalla en el mostrador. Tus clientes la escanean con la cámara del móvil y suman su sello del día.</p>
+  <div class="qr qr-big">${qrSvg(input.url)}</div>
+  <p class="small muted">El código cambia solo cada minuto, así que una foto deja de servir enseguida.</p>
+</section>
+<section class="card">
+  <h2>¿Alguien comparte una foto del QR?</h2>
+  <p class="muted">Cambia la clave: todos los QR anteriores dejan de servir al instante.</p>
+  <details><summary>Cambiar la clave del QR</summary>
+    <form method="post" action="/n/${id}/qr/rotar"><button type="submit" class="btn btn-danger">Sí, cambiar la clave</button></form>
+  </details>
+</section>`
+    : `<section class="card"><p class="alert">El QR del día aún no está disponible. Avisa a tu proveedor.</p></section>`;
+  return layout(
+    `QR del día · ${input.business.name}`,
+    `${nav(input.business, input.session, true, 'qr')}
+<h1>QR del día</h1>
+${flash(input.flash)}
+${body}`,
+    input.session,
+    input.url ? `<meta http-equiv="refresh" content="${QR_REFRESH_SECONDS}">` : '',
   );
 }

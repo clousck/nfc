@@ -17,15 +17,22 @@ import {
   putTagSettings,
 } from '../internal/control-plane.js';
 import { loyaltyContacts } from '../internal/queries.js';
-import { loyaltySummary } from '../loyalty/store.js';
+import { loyaltySummary, qrKeyVersion, rotateQrKey } from '../loyalty/store.js';
+import { CHECKIN_PATH, rotatingQrToken } from '../presence/index.js';
 import { queryReportStats } from '../report.js';
 import { renderReportPage } from '../report-page.js';
-import { createPairing, listStaffDevices, revokeStaffDevice } from '../staff/store.js';
+import {
+  createPairing,
+  listStaffDevices,
+  publicOrigin,
+  revokeStaffDevice,
+} from '../staff/store.js';
 import {
   activityPage,
   businessPage,
   isFlashCode,
   pairingPage,
+  qrPage,
   staffPage,
   type FlashCode,
 } from './business-pages.js';
@@ -333,4 +340,45 @@ businessRoutes.post('/personal/:deviceId/revocar', async (c) => {
     id: c.get('session').accountId,
   });
   return back(business.id, 'vinculado_revocado', '/personal');
+});
+
+/** QR rotativo del negocio (fase 5). Sin fidelidad activa no hay nada que sellar. */
+businessRoutes.get('/qr', async (c) => {
+  const business = c.get('business');
+  if (!(await hasLoyalty(c.env, business.id))) return c.notFound();
+  const key = c.env.PRESENCE_MASTER_KEY;
+  const url = key
+    ? `${publicOrigin(c.env)}${CHECKIN_PATH}/${
+        (
+          await rotatingQrToken(
+            key,
+            business.id,
+            await qrKeyVersion(c.env.DB, business.id),
+            Date.now(),
+          )
+        ).token
+      }`
+    : null;
+  const m = c.req.query('m');
+  return html(
+    qrPage({ session: c.get('session'), business, url, flash: isFlashCode(m) ? m : null }),
+  );
+});
+
+businessRoutes.post('/qr/rotar', async (c) => {
+  const business = c.get('business');
+  const now = Date.now();
+  const version = await rotateQrKey(c.env.DB, business.id, now);
+  if (version !== null) {
+    await auditStatement(c.env.DB, {
+      businessId: business.id,
+      actor: { type: 'owner', id: c.get('session').accountId },
+      action: 'qr.rotated',
+      target: null,
+      before: { version: version - 1 },
+      after: { version },
+      ts: now,
+    }).run();
+  }
+  return back(business.id, 'qr_rotado', '/qr');
 });

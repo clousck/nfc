@@ -44,10 +44,18 @@ details form{margin-top:10px}
 .qr{max-width:20rem;margin:16px auto;background:#fff;padding:14px;border-radius:var(--radius);border:2px solid var(--accent)}
 .qr svg{display:block;width:100%;height:auto}
 .break{word-break:break-all}
+.qr-big{max-width:min(28rem,80vw);border-width:3px}
+.qr-stage{text-align:center}
+.qr-stage p{max-width:32rem;margin-left:auto;margin-right:auto}
 @media (max-width:600px){header,main{padding-left:16px;padding-right:16px}}
 `;
 
-export function layout(title: string, body: string, session?: PortalSession | null): string {
+export function layout(
+  title: string,
+  body: string,
+  session?: PortalSession | null,
+  extraHead = '',
+): string {
   const user = session
     ? `<form method="post" action="/salir"><span class="muted small">${esc(session.email)}</span>
        <button type="submit" class="btn-link small">Salir</button></form>`
@@ -60,6 +68,7 @@ export function layout(title: string, body: string, session?: PortalSession | nu
 <meta name="robots" content="noindex">
 <title>${esc(title)} · Portal de negocios</title>
 <style>${STYLES}</style>
+${extraHead}
 </head>
 <body>
 <header><a href="/" class="brand" style="color:inherit;text-decoration:none">Portal de negocios</a>${user}</header>
