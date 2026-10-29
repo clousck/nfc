@@ -359,6 +359,7 @@ export function qrPage(input: {
   <p>Deja esta pantalla en el mostrador. Tus clientes la escanean con la cámara del móvil y suman su sello del día.</p>
   <div class="qr qr-big">${qrSvg(input.url)}</div>
   <p class="small muted">El código cambia solo cada minuto, así que una foto deja de servir enseguida.</p>
+  <p class="small muted">Para dejarlo fijo en el mostrador usa un móvil del personal (Personal → vincular → «Mostrar el QR del día»): esta pantalla abre tu sesión de dueño, con acceso a tus contactos.</p>
 </section>
 <section class="card">
   <h2>¿Alguien comparte una foto del QR?</h2>

@@ -226,3 +226,11 @@ enlace de estadísticas sin credencial nunca muestra nombres ni teléfonos.
   dueño puede invalidar todos los QR al instante subiendo la versión de la clave.
 - El pase de presencia (`nfc_presence`) es `HttpOnly`, `Secure`, `SameSite=Lax`, limitado a
   `/c/registro/` y caduca a los 10 minutos.
+
+## Revisión del 2026-10-29
+
+- Panel admin: además de Cloudflare Access, `/api/*` rechaza los métodos que cambian datos si
+  `Sec-Fetch-Site` no es `same-origin` (CSRF con la cookie de Access desde otro sitio).
+- `/c/*` (QR rotativo) cuenta en el rate limiting con la acción `checkin`, por red.
+- `pnpm.overrides` fuerza versiones parcheadas de `undici`, `zod` y `esbuild` en dependencias de
+  desarrollo (`@cloudflare/vitest-plugin`, `drizzle-kit`); `pnpm audit` queda limpio.

@@ -375,3 +375,22 @@ describe('re-sincronizar todo', () => {
     expect(res.body['ok']).toBe(false);
   });
 });
+
+describe('CSRF', () => {
+  it('rechaza cambios enviados desde otro sitio y acepta los del propio panel', async () => {
+    const created = await ctx.json('POST', '/api/businesses', { name: 'Café CSRF' });
+    const id = (created.body as { id: string }).id;
+    const cross = await ctx.request('POST', `/api/businesses/${id}/report-token`, undefined, {
+      'sec-fetch-site': 'cross-site',
+    });
+    expect(cross.status).toBe(403);
+    const same = await ctx.request('POST', `/api/businesses/${id}/report-token`, undefined, {
+      'sec-fetch-site': 'same-origin',
+    });
+    expect(same.status).not.toBe(403);
+    const read = await ctx.request('GET', '/api/businesses', undefined, {
+      'sec-fetch-site': 'cross-site',
+    });
+    expect(read.status).toBe(200);
+  });
+});

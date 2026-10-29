@@ -225,6 +225,17 @@ loyaltyRoutes.post('/l/:slug/registro', async (c) => {
  */
 loyaltyRoutes.get(`${CHECKIN_PATH}/:token`, async (c) => {
   const now = Date.now();
+  // Cada intento cuesta lecturas de KV/D1 y criptografía: se limita por red como el alta.
+  const allowed = await allowRequest(c.env, c.executionCtx, [
+    {
+      action: 'checkin',
+      scope: 'network',
+      actor: 'customer',
+      key: clientIp(c.req.raw),
+      businessId: null,
+    },
+  ]);
+  if (!allowed) return tooMany();
   const proof = await rotatingQr.verify(
     { token: c.req.param('token') },
     {

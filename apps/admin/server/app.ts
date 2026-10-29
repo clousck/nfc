@@ -31,6 +31,15 @@ export function createApp(options: CreateAppOptions) {
   app.get('/health', (c) => c.text('ok'));
 
   if (auth) app.use('/api/*', auth);
+  // CSRF: la cookie de Access viaja también en peticiones de otros sitios. Las que cambian datos
+  // solo se aceptan desde el propio panel (Sec-Fetch-Site lo pone el navegador; no se falsifica).
+  app.use('/api/*', async (c, next) => {
+    const site = c.req.header('sec-fetch-site');
+    if (!['GET', 'HEAD', 'OPTIONS'].includes(c.req.method) && site && site !== 'same-origin') {
+      return c.json({ error: 'forbidden' }, 403);
+    }
+    await next();
+  });
 
   const publisher = deps.publisher ?? createPublisher({ db: deps.db, edge: deps.edge });
   const routeDeps: RouteDeps = {

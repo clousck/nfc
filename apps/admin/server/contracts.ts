@@ -105,7 +105,7 @@ export interface RateLimitIncidentDto {
   businessName: string | null;
   /** Día local YYYY-MM-DD. */
   day: string;
-  action: 'signup' | 'redeem' | 'validate' | 'login';
+  action: 'signup' | 'redeem' | 'validate' | 'login' | 'checkin';
   actor: 'customer' | 'staff' | 'anonymous';
   scope: 'device' | 'network' | 'staff' | 'login';
   mode: 'observe' | 'enforce';

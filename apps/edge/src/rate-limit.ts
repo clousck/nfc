@@ -4,7 +4,7 @@ import type { Env } from './env.js';
 // Límites de peticiones (docs/SECURITY.md §4). Se limita lo que escribe datos o se puede
 // adivinar; nunca la redirección de un chip. La IP solo se usa en memoria para contar.
 
-export type RateAction = 'signup' | 'redeem' | 'validate' | 'login';
+export type RateAction = 'signup' | 'redeem' | 'validate' | 'login' | 'checkin';
 /** Qué límite se aplica: por móvil, por red (IP + negocio), por credencial del personal o por correo. */
 export type RateScope = 'device' | 'network' | 'staff' | 'login';
 export type RateActor = 'customer' | 'staff' | 'anonymous';

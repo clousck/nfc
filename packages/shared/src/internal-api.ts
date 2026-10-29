@@ -160,7 +160,7 @@ export const RateLimitIncidentsResponse = z.object({
       businessId: z.string(),
       /** Día local YYYY-MM-DD. */
       day: z.string(),
-      action: z.enum(['signup', 'redeem', 'validate', 'login']),
+      action: z.enum(['signup', 'redeem', 'validate', 'login', 'checkin']),
       actor: z.enum(['customer', 'staff', 'anonymous']),
       scope: z.enum(['device', 'network', 'staff', 'login']),
       mode: z.enum(['observe', 'enforce']),

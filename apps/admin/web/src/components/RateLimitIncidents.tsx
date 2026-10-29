@@ -4,6 +4,7 @@ import { formatDate } from '../ui';
 
 const ACTIONS: Record<string, string> = {
   signup: 'Alta de tarjeta',
+  checkin: 'QR del local',
   redeem: 'Canje de premio',
   validate: 'Validación de canje',
   login: 'Pedir acceso al portal',
