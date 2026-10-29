@@ -10,6 +10,14 @@ import { esc, TIME_ZONE } from '../html.js';
 import type { ProjectedTag } from '../internal/control-plane.js';
 import { qrSvg } from '../loyalty/pages.js';
 import type { LoyaltySummary } from '../loyalty/store.js';
+import type { ReportRecord } from '@nfc/shared';
+import type { ReportStats } from '../report.js';
+import {
+  REPORT_STYLES,
+  reportContent,
+  reportFootnote,
+  type ReportLoyalty,
+} from '../report-page.js';
 import { appLayout, type NavKey } from './pages.js';
 import type { PortalBusiness, PortalSession } from './session.js';
 import type { TodayVisits } from './today.js';
@@ -368,6 +376,29 @@ export function chipsPage(input: {
     body: `${head('Chips', `${input.tags.length} ${input.tags.length === 1 ? 'stand' : 'stands'} · cambia a dónde lleva cada uno sin tocar el chip`)}
 ${flash(input.flash)}
 ${list}`,
+  });
+}
+
+// ---------- Estadísticas ----------
+
+export function statsPage(input: {
+  session: PortalSession;
+  business: PortalBusiness;
+  report: ReportRecord;
+  stats: ReportStats;
+  loyalty: ReportLoyalty | null;
+  now: number;
+}): string {
+  return page({
+    title: 'Estadísticas',
+    session: input.session,
+    business: input.business,
+    current: 'estadisticas',
+    loyalty: input.loyalty !== null,
+    body: `${head('Estadísticas', `Cuántas personas usan tus chips y códigos QR · actualizado a las ${esc(timeOnly.format(new Date(input.now)))}`)}
+${reportContent(input.report, input.stats, input.loyalty)}
+${reportFootnote()}`,
+    extraHead: `<style>${REPORT_STYLES}</style>`,
   });
 }
 

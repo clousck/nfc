@@ -157,7 +157,8 @@ describe('portal: estadísticas, contactos y actividad', () => {
     const res = await portal('GET', `/n/${BIZ}/estadisticas`, { cookie });
     expect(res.status).toBe(200);
     const text = await res.text();
-    expect(text).toContain('Volver al portal');
+    expect(text).toContain('Escaneos por día');
+    expect(text).toContain(`href="/n/${BIZ}/chips"`);
     expect(text).toContain('Café X');
   });
 

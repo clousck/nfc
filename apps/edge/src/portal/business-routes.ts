@@ -20,7 +20,6 @@ import { loyaltyContacts } from '../internal/queries.js';
 import { loyaltySummary, qrKeyVersion, rotateQrKey } from '../loyalty/store.js';
 import { CHECKIN_PATH, rotatingQrToken } from '../presence/index.js';
 import { queryReportStats } from '../report.js';
-import { renderReportPage } from '../report-page.js';
 import {
   createPairing,
   listStaffDevices,
@@ -35,6 +34,7 @@ import {
   pairingPage,
   qrPage,
   staffPage,
+  statsPage,
   type FlashCode,
 } from './business-pages.js';
 import { mailSender } from './mail.js';
@@ -270,7 +270,7 @@ businessRoutes.get('/estadisticas', async (c) => {
   const visits = state?.loyaltyVisits ?? null;
   const loyalty =
     visits === null ? null : { visits, summary: await loyaltySummary(c.env.DB, business.id, now) };
-  return html(renderReportPage(report, stats, now, loyalty, { backUrl: `/n/${business.id}` }));
+  return html(statsPage({ session: c.get('session'), business, report, stats, loyalty, now }));
 });
 
 /** Contactos que aceptaron promociones. La descarga queda en la auditoría (datos personales). */
