@@ -75,7 +75,7 @@ function nav(
 ): string {
   const base = `/n/${esc(business.id)}`;
   const items: [NavKey | null, string, string][] = [
-    ['chips', base, 'Chips'],
+    ['chips', base, 'Resumen'],
     ...(loyalty ? [['qr', `${base}/qr`, 'QR del día'] as [NavKey, string, string]] : []),
     ['estadisticas', `${base}/estadisticas`, 'Estadísticas'],
     ['personal', `${base}/personal`, 'Personal'],
@@ -108,7 +108,17 @@ const TYPE_LABEL: Record<ProjectedTag['type'], string> = {
   landing: 'Página',
 };
 
-function chipCard(businessId: string, tag: ProjectedTag): string {
+/** Dominio del destino, para leerlo de un vistazo ("instagram.com"). */
+function host(url: string | null): string {
+  if (!url) return '';
+  try {
+    return new URL(url).host.replace(/^www\./, '');
+  } catch {
+    return url;
+  }
+}
+
+function chipRow(businessId: string, tag: ProjectedTag): string {
   const action = `/n/${esc(businessId)}/chips/${esc(tag.slug)}`;
   const target =
     tag.type === 'landing'
@@ -117,45 +127,65 @@ function chipCard(businessId: string, tag: ProjectedTag): string {
       <input type="url" name="destino" maxlength="2048" placeholder="https://…" ${tag.type === 'redirect' ? 'required' : ''} value="${esc(tag.targetUrl ?? '')}">
     </label>`;
   const pause = tag.pausedAt
-    ? `<form method="post" action="${action}/pausa"><input type="hidden" name="accion" value="reactivar">
+    ? `<form method="post" action="${action}/pausa" class="stack"><input type="hidden" name="accion" value="reactivar">
       <p class="small muted">Pausado el ${esc(fmt(tag.pausedAt))}. Si el stand vuelve a estar en su sitio, reactívalo.</p>
       <button type="submit" class="btn">Reactivar chip</button></form>`
-    : `<details><summary class="small">¿Se perdió o se dañó el stand?</summary>
+    : `<details class="lost"><summary class="small">¿Se perdió o se dañó el stand?</summary>
       <form method="post" action="${action}/pausa" class="stack">
         <input type="hidden" name="accion" value="pausar">
         <p class="small muted">El chip dejará de funcionar (mostrará "Enlace no disponible") para que nadie lo use fuera de tu local, y avisaremos a tu proveedor para reponerlo. Puedes reactivarlo cuando quieras.</p>
         <button type="submit" class="btn">Sí, pausar este chip</button>
       </form></details>`;
-  return `<section class="card">
-  <h2>Chip #${tag.number}${tag.label ? ` · ${esc(tag.label)}` : ''}</h2>
-  <p class="small">${status(tag)} <span class="muted">${TYPE_LABEL[tag.type]}</span></p>
-  <form method="post" action="${action}" class="stack">
-    <label>Etiqueta (para reconocerlo)
-      <input name="etiqueta" maxlength="80" placeholder="Caja, Mesa 3…" value="${esc(tag.label ?? '')}">
-    </label>
-    ${target}
-    <button type="submit" class="btn btn-primary">Guardar</button>
-  </form>
-  ${pause}
-</section>`;
+  const dest = host(tag.targetUrl);
+  return `<li class="chip">
+  <details>
+    <summary>
+      <span class="chip-num">#${tag.number}</span>
+      <span class="chip-name"><strong>${tag.label ? esc(tag.label) : `Chip #${tag.number}`}</strong>
+        <span class="small muted">Chip #${tag.number} · ${TYPE_LABEL[tag.type]}${dest ? ` · ${esc(dest)}` : ''}</span></span>
+      ${status(tag)}
+      <span class="chip-edit">Editar</span>
+    </summary>
+    <div class="chip-body">
+      <form method="post" action="${action}" class="stack">
+        <label>Etiqueta (para reconocerlo)
+          <input name="etiqueta" maxlength="80" placeholder="Caja, Mesa 3…" value="${esc(tag.label ?? '')}">
+        </label>
+        ${target}
+        <button type="submit" class="btn btn-primary">Guardar</button>
+      </form>
+      ${pause}
+    </div>
+  </details>
+</li>`;
 }
 
-function rewardSection(
+function loyaltyOverview(
   businessId: string,
   visits: number | null,
   summary: LoyaltySummary | null,
 ): string {
   if (visits === null || !summary) return '';
-  return `<section class="card">
-  <h2>Programa de fidelidad</h2>
-  <p class="small muted">Últimos 30 días: ${summary.stamps30} sellos · ${summary.redemptions30} premios canjeados · ${summary.activeCards} tarjetas activas de ${summary.cards}.</p>
-  <form method="post" action="/n/${esc(businessId)}/premio" class="stack">
-    <label>Visitas para el premio
-      <input type="number" name="visitas" required min="${LOYALTY_MIN_VISITS}" max="${LOYALTY_MAX_VISITS}" value="${visits}">
-    </label>
-    <p class="small muted">Las tarjetas que ya tienen sellos los conservan. El premio en sí lo entregas tú en el local.</p>
-    <button type="submit" class="btn btn-primary">Guardar</button>
-  </form>
+  const id = esc(businessId);
+  return `<section class="overview" aria-labelledby="ov-title">
+  <h2 id="ov-title">Últimos 30 días</h2>
+  <dl class="kpis">
+    <div><dt>Sellos</dt><dd>${summary.stamps30}</dd><p>visitas registradas</p></div>
+    <div><dt>Premios entregados</dt><dd>${summary.redemptions30}</dd><p>${summary.validated30} validados por tu personal</p></div>
+    <div><dt>Tarjetas activas</dt><dd>${summary.activeCards}</dd><p>de ${summary.cards} creadas</p></div>
+    <div class="kpi-reward"><dt>Premio</dt><dd>${visits} <span>visitas</span></dd>
+      <details><summary>Cambiar</summary>
+        <form method="post" action="/n/${id}/premio" class="stack">
+          <label>Visitas para el premio
+            <input type="number" name="visitas" required min="${LOYALTY_MIN_VISITS}" max="${LOYALTY_MAX_VISITS}" value="${visits}">
+          </label>
+          <p class="small muted">Las tarjetas que ya tienen sellos los conservan. El premio lo entregas tú en el local.</p>
+          <button type="submit" class="btn btn-primary">Guardar</button>
+        </form>
+      </details>
+    </div>
+  </dl>
+  <a class="btn btn-primary qr-cta" href="/n/${id}/qr">Mostrar el QR del día</a>
 </section>`;
 }
 
@@ -174,16 +204,19 @@ export function businessPage(input: {
       : '';
   const chips =
     input.tags.length === 0
-      ? '<section class="card"><p class="muted">Todavía no tienes chips asignados.</p></section>'
-      : input.tags.map((t) => chipCard(business.id, t)).join('\n');
+      ? '<p class="muted empty">Todavía no tienes chips asignados.</p>'
+      : `<ul class="chips">${input.tags.map((t) => chipRow(business.id, t)).join('')}</ul>`;
   return layout(
     business.name,
     `${nav(business, session, input.loyaltyVisits !== null, 'chips')}
-<h1>Chips</h1>
+<h1>${esc(business.name)}</h1>
 ${flash(input.flash)}
 ${paused}
-${rewardSection(business.id, input.loyaltyVisits, input.loyalty)}
-${chips}`,
+${loyaltyOverview(business.id, input.loyaltyVisits, input.loyalty)}
+<section class="panel" aria-labelledby="chips-title">
+  <h2 id="chips-title">Tus chips <span class="muted">${input.tags.length}</span></h2>
+  ${chips}
+</section>`,
     session,
   );
 }

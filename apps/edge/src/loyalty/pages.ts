@@ -89,15 +89,8 @@ export function signupPage(input: {
 }): string {
   const { businessName: name } = input;
   const body = `
-<section class="card brand">
-  <div class="brand-head">
-    <div class="seal">${esc(initials(name))}</div>
-    <div>
-      <p class="eyebrow">Tarjeta de fidelidad</p>
-      <h1>${esc(name)}</h1>
-    </div>
-  </div>
-  <p class="pitch">Completa <strong>${input.visits} visitas</strong> y reclama tu premio</p>
+${hero(name, `Completa ${input.visits} visitas y llévate tu premio`, 'Tu tarjeta de sellos, sin apps ni cartón: vive en este móvil.', false)}
+<section class="ticket">
   ${stampGrid({ visits: input.visits, stamps: 0, initials: initials(name), animateIndex: null })}
 </section>
 
@@ -135,6 +128,15 @@ function stampColumns(visits: number): number {
   if (visits % 3 === 0 && visits <= 9) return 3;
   if (visits % 4 === 0 || visits === 7) return 4;
   return 5;
+}
+
+/** Franja superior con el nombre del negocio y el mensaje del momento. */
+function hero(name: string, headline: string, detail: string, ready: boolean): string {
+  return `<header class="hero${ready ? ' hero-ready' : ''}">
+  <div class="hero-brand"><span class="seal" aria-hidden="true">${esc(initials(name))}</span><h1>${esc(name)}</h1></div>
+  <p class="headline">${headline}</p>
+  <p class="pitch">${detail}</p>
+</header>`;
 }
 
 function stampGrid(input: {
@@ -197,17 +199,12 @@ export function cardPage(input: {
   const animateIndex = input.message === 'added' || input.message === 'welcome' ? stamps - 1 : null;
 
   const body = `
-<section class="card brand${ready ? ' complete' : ''}">
-  <div class="brand-head">
-    <div class="seal">${esc(initials(name))}</div>
-    <div>
-      <p class="eyebrow">Tarjeta de fidelidad</p>
-      <h1>${esc(name)}</h1>
-    </div>
+${hero(name, headline, detail, ready)}
+<section class="ticket${ready ? ' complete' : ''}">
+  <div class="count">
+    <p><span class="count-n">${Math.min(stamps, visits)}</span><span class="count-of">/${visits}</span></p>
+    <p class="count-label">${ready ? 'Premio listo' : `Premio en ${remaining} ${remaining === 1 ? 'visita' : 'visitas'}`}</p>
   </div>
-  <p class="headline">${headline}</p>
-  <p class="pitch">${detail}</p>
-  <div class="progress" role="progressbar" aria-valuemin="0" aria-valuemax="${visits}" aria-valuenow="${stamps}"><span style="width:${Math.round((Math.min(stamps, visits) / visits) * 100)}%"></span></div>
   ${stampGrid({ visits, stamps: Math.min(stamps, visits), initials: initials(name), animateIndex })}
   ${ready ? '<div class="confetti" aria-hidden="true">' + '<i></i>'.repeat(14) + '</div>' : ''}
 </section>
@@ -222,9 +219,9 @@ ${
     ? `<a class="btn" href="/l/canje/${esc(input.pendingCode)}">Ver el QR de mi último canje</a>`
     : ''
 }
-${input.continueUrl ? `<a class="btn btn-primary" href="${esc(input.continueUrl)}">Continuar</a>` : ''}
+${input.continueUrl ? `<a class="btn${ready ? '' : ' btn-primary'}" href="${esc(input.continueUrl)}">Continuar</a>` : ''}
 
-<p class="note">Suma 1 sello por día acercando tu móvil al stand. Si pasas ${LOYALTY_EXPIRY_DAYS} días sin venir, tu tarjeta vuelve a empezar.</p>
+<p class="note">Suma 1 sello por día acercando tu móvil al stand o escaneando el QR del local. Si pasas ${LOYALTY_EXPIRY_DAYS} días sin venir, tu tarjeta vuelve a empezar.</p>
 ${footerLinks(input.businessId, true)}`;
   return layout(`${name} · Mi tarjeta`, body);
 }
@@ -471,15 +468,23 @@ export function messagePage(title: string, text: string): string {
 }
 
 const STYLES = `${THEME_CSS}
-.wrap{max-width:460px;margin:0 auto;padding:20px 16px 40px;display:flex;flex-direction:column;gap:12px}
-.brand{background:var(--surface);padding:22px 20px 20px}
-.brand-head{display:flex;align-items:center;gap:14px}
-.seal{flex:none;width:52px;height:52px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:1.05rem;letter-spacing:.02em;color:var(--accent);background:var(--accent-soft);border:2px solid var(--accent)}
-.headline{font-size:1.75rem;font-weight:700;letter-spacing:-.02em;line-height:1.15;margin:18px 0 0}
-.pitch{margin:6px 0 16px;color:var(--muted)}
-.pitch strong{color:var(--text)}
-.progress{height:6px;border-radius:99px;background:var(--accent-track);overflow:hidden;margin-bottom:18px}
-.progress span{display:block;height:100%;background:var(--accent);border-radius:99px;transition:width .6s cubic-bezier(.2,.8,.2,1)}
+.wrap{max-width:460px;margin:0 auto;padding:0 16px 40px;display:flex;flex-direction:column;gap:12px}
+.wrap>.card:first-child,.wrap>section:first-child:not(.hero){margin-top:20px}
+.hero{margin:0 -16px;padding:28px 24px 72px;background:var(--accent-ink);color:#fff}
+.hero-brand{display:flex;align-items:center;gap:12px}
+.hero h1{font-size:1rem;font-weight:600;letter-spacing:0}
+.seal{flex:none;width:40px;height:40px;border-radius:50%;display:grid;place-items:center;font-weight:700;font-size:.875rem;letter-spacing:.02em;color:#fff;border:2px solid rgba(255,255,255,.7)}
+.headline{font-size:2.25rem;font-weight:700;letter-spacing:-.03em;line-height:1.05;margin:28px 0 0}
+.pitch{margin:10px 0 0;color:rgba(255,255,255,.82);font-size:1.0625rem}
+.pitch strong{color:#fff}
+.hero-ready{background:var(--accent)}
+.ticket{position:relative;overflow:hidden;margin-top:-52px;background:var(--surface);border-radius:16px;padding:22px 20px 24px;border:1px solid var(--border)}
+.count{display:flex;align-items:baseline;justify-content:space-between;gap:12px;margin-bottom:18px}
+.count p{margin:0}
+.count-n{font-size:3.5rem;font-weight:700;letter-spacing:-.04em;line-height:1;color:var(--accent);font-variant-numeric:tabular-nums}
+.count-of{font-size:1.5rem;font-weight:600;color:var(--muted);font-variant-numeric:tabular-nums}
+.count-label{font-weight:600;color:var(--muted);text-align:right}
+.complete .count-label{color:var(--accent-ink)}
 .stamps{list-style:none;margin:0;padding:0;display:grid;grid-template-columns:repeat(var(--cols),1fr);gap:12px}
 .slot{aspect-ratio:1;border-radius:50%;border:2px dashed var(--control);display:grid;place-items:center;position:relative;background:var(--ground)}
 .slot-label{color:var(--muted);font-weight:600;font-size:.9375rem;font-variant-numeric:tabular-nums}
@@ -491,8 +496,6 @@ const STYLES = `${THEME_CSS}
 .reward .ink-text{font-size:.75rem}
 .slot.new .ink{animation:stamp .7s cubic-bezier(.2,1.4,.4,1) both}
 @keyframes stamp{0%{transform:scale(2.4) rotate(calc(var(--r) - 25deg));opacity:0}55%{opacity:1;transform:scale(.88) rotate(var(--r))}100%{transform:scale(1) rotate(var(--r))}}
-.complete{background:var(--accent-soft);border-color:var(--accent-track)}
-.complete .headline{color:var(--accent-ink)}
 .confetti{position:absolute;inset:0;pointer-events:none}
 .confetti i{position:absolute;top:-10px;width:7px;height:12px;border-radius:2px;animation:fall 2.6s ease-in forwards}
 .confetti i:nth-child(odd){background:var(--accent)}.confetti i:nth-child(even){background:var(--accent-ink)}.confetti i:nth-child(3n){background:var(--accent-track)}
