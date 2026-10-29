@@ -1,4 +1,4 @@
-import { THEME_CSS } from './ui/theme.js';
+import { DEVICE_CSS, MARK_SVG, THEME_CSS } from './ui/theme.js';
 
 /** Página genérica para slugs inexistentes o inactivos (en lugar de un 404 crudo). */
 export const FALLBACK_HTML = `<!doctype html>
@@ -8,20 +8,16 @@ export const FALLBACK_HTML = `<!doctype html>
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="robots" content="noindex">
 <title>Enlace no disponible</title>
-<style>${THEME_CSS}
-  body { min-height: 100vh; display: grid; place-items: center; }
-  main { max-width: 24rem; padding: 2rem 1.25rem; }
-  .mark { width: 44px; height: 44px; border-radius: 50%; border: 2px dashed var(--accent); background: var(--accent-soft); }
-  h1 { font-size: 1.5rem; margin: 1.25rem 0 .5rem; }
-  p { margin: 0; color: var(--muted); }
-</style>
+<style>${THEME_CSS}${DEVICE_CSS}</style>
 </head>
-<body>
-<main>
-  <div class="mark" aria-hidden="true"></div>
+<body class="device">
+<div class="screen">
+<main class="status">
+  <span class="mark">${MARK_SVG}<span>PengineXR</span></span>
   <h1>Este enlace no está disponible</h1>
   <p>Puede que esté en mantenimiento o haya cambiado. Pide ayuda en el local o inténtalo más tarde.</p>
 </main>
+</div>
 </body>
 </html>`;
 

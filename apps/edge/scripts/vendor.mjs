@@ -23,18 +23,23 @@ if (!scanner.includes(`'/vendor/jsqr-${version}.js'`)) {
 mkdirSync(dirname(target), { recursive: true });
 copyFileSync(join(dirname(jsqrPackage), 'dist', 'jsQR.js'), target);
 
-// Tipografía de todas las páginas (DM Sans variable, subconjunto latino). Mismo esquema: la
-// versión va en el nombre y debe coincidir con FONT_PATH (src/ui/theme.ts).
-const fontPackage = require.resolve('@fontsource-variable/dm-sans/package.json');
-const fontVersion = JSON.parse(readFileSync(fontPackage, 'utf8')).version;
+// Tipografías de todas las páginas (subconjunto latino). Mismo esquema que jsQR: la versión va
+// en el nombre y cada ruta debe aparecer tal cual en src/ui/theme.ts.
 const theme = readFileSync(join(root, 'src', 'ui', 'theme.ts'), 'utf8');
-if (!theme.includes(`'/vendor/dm-sans-${fontVersion}.woff2'`)) {
-  throw new Error(`FONT_PATH en src/ui/theme.ts no apunta a dm-sans-${fontVersion}.woff2`);
+const FONTS = [
+  ['@fontsource-variable/ibm-plex-sans', 'ibm-plex-sans-latin-wght-normal.woff2', 'ibm-plex-sans'],
+  ['@fontsource/ibm-plex-mono', 'ibm-plex-mono-latin-400-normal.woff2', 'ibm-plex-mono-400'],
+  ['@fontsource/ibm-plex-mono', 'ibm-plex-mono-latin-500-normal.woff2', 'ibm-plex-mono-500'],
+];
+for (const [pkg, file, name] of FONTS) {
+  const pkgJson = require.resolve(`${pkg}/package.json`);
+  const fontVersion = JSON.parse(readFileSync(pkgJson, 'utf8')).version;
+  const out = `${name}-${fontVersion}.woff2`;
+  if (!theme.includes(`'/vendor/${out}'`)) {
+    throw new Error(`src/ui/theme.ts no apunta a /vendor/${out}`);
+  }
+  copyFileSync(join(dirname(pkgJson), 'files', file), join(root, 'public', 'vendor', out));
 }
-copyFileSync(
-  join(dirname(fontPackage), 'files', 'dm-sans-latin-wght-normal.woff2'),
-  join(root, 'public', 'vendor', `dm-sans-${fontVersion}.woff2`),
-);
 
 // Cabeceras de los estáticos: el nombre lleva la versión, así que se cachean un año.
 writeFileSync(

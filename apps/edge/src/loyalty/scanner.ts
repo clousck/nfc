@@ -13,15 +13,15 @@ export function scannerCsp(nonce: string): string {
 /** Botón, vídeo y avisos del lector. */
 export function scannerHtml(): string {
   return `<div class="scanner">
-  <button type="button" id="scan-start" class="btn btn-primary">Escanear QR</button>
+  <button type="button" id="scan-start" class="btn btn-primary btn-lg btn-block">Escanear QR</button>
   <div id="scan-view" class="scan-view" hidden>
     <div class="scan-box">
       <video id="scan-video" playsinline muted></video>
       <div class="scan-frame" aria-hidden="true"></div>
     </div>
-    <button type="button" id="scan-stop" class="btn">Cancelar</button>
+    <button type="button" id="scan-stop" class="btn btn-lg btn-block">Cancelar</button>
   </div>
-  <p id="scan-msg" class="alert" role="status" hidden></p>
+  <p id="scan-msg" class="notice notice-bad" role="status" hidden></p>
 </div>`;
 }
 
@@ -151,10 +151,9 @@ export function scannerScript(nonce: string, autostart: boolean): string {
 /** Estilos del lector (se añaden a los de la página). */
 export const SCANNER_STYLES = `
 [hidden]{display:none!important}
-.scanner{margin:16px 0}
-.scan-view{margin-top:8px}
-.scan-box{position:relative;overflow:hidden;border-radius:12px}
-.scan-box video{width:100%;border-radius:12px;background:#000;display:block;aspect-ratio:1/1;object-fit:cover}
-.scan-frame{position:absolute;inset:18%;border:3px solid #fff;border-radius:16px;box-shadow:0 0 0 999px rgba(0,0,0,.25);pointer-events:none}
-.scan-view .btn{margin-top:8px;width:100%}
+.scanner{display:grid;gap:12px}
+.scan-view{display:grid;gap:12px}
+.scan-box{position:relative;overflow:hidden;border-radius:18px;border:3px solid var(--day,var(--accent))}
+.scan-box video{width:100%;background:#000;display:block;aspect-ratio:1/1;object-fit:cover}
+.scan-frame{position:absolute;inset:18%;border:3px solid #fff;border-radius:16px;pointer-events:none}
 `;
