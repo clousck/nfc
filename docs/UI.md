@@ -31,7 +31,7 @@
 flowchart LR
   subgraph Admin["Panel admin · nfc-admin (Pi) · marco + hoja"]
     A1[Inicio] --- A2[Negocios] --- A3[Chips] --- A4[Ajustes]
-    A2 --> A5["Negocio: Resumen · Chips · Fidelidad · Accesos · Estadísticas · Datos"]
+    A2 --> A5["Negocio: Resumen · Fidelidad · Accesos · Estadísticas · Datos"]
     A3 --> A6[Chip: configuración · grabar · QR · escaneos]
   end
   subgraph Portal["Portal · negocios. · marco + hoja; en móvil barra inferior"]
@@ -61,7 +61,7 @@ flowchart LR
 | ------------------ | --------------------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | **Inicio** (nueva) | ¿Funciona todo y qué necesita atención? | Título + línea de estado ("Publicación al día · 4 negocios · 12 chips en la calle"). Franja de 4 cifras. Principal: **rack de chips**. Carril derecho: "Requiere atención" (stands pausados, chips sin destino, sin publicar) y negocios recientes |
 | Negocios           | ¿Quién es cliente y en qué estado?      | Pestañas por estado con recuento, buscador, **tabla** (negocio, plan, estado, chips, fidelidad, alta). "Nuevo negocio" abre un panel lateral                                                                                                       |
-| Negocio            | Todo de un cliente                      | Migas + nombre + estado; **pestañas**: Resumen, Chips, Fidelidad, Accesos (dueño y personal), Estadísticas (enlace e incidentes), Datos (formulario y borrar)                                                                                      |
+| Negocio            | Todo de un cliente                      | Migas + nombre + estado; **pestañas**: Resumen (chips y ficha), Fidelidad, Accesos (dueño y personal), Estadísticas (enlace e incidentes), Datos (formulario y borrar)                                                                             |
 | Chips              | ¿Qué hay en el inventario?              | Pestañas Todos/Libres/En uso/Pausados, buscador, "Crear chips" en la fila del título, **tabla** densa con número y código en mono                                                                                                                  |
 | Chip               | Configurar, grabar e imprimir           | Migas + "Chip #12"; dos columnas: configuración y grabado NFC a la izquierda; carril con QR, URLs, escaneos y zona de peligro                                                                                                                      |
 | Ajustes            | Ajustes de la plataforma                | Filas de ajustes (etiqueta y descripción a la izquierda, panel a la derecha): avisos, publicación, límites de peticiones                                                                                                                           |
@@ -101,11 +101,14 @@ flowchart LR
   salvo el reloj del canje, el lector QR y la consulta del estado del canje (con nonce).
 - Movimiento solo como respuesta (pulsar, desplegar); el sello nuevo se "estampa".
 
-## 6. Fases (un commit por fase)
+## 6. Cómo se comprobó
 
-1. Base: fuentes Plex (Worker y panel), tokens y kit de componentes del Worker.
-2. Cliente y personal (Worker).
-3. Portal (armazón, Hoy con franja del día, Chips, QR, Personal, Actividad, acceso).
-4. Estadísticas (enlace público y portal).
-5. Panel admin (armazón, Inicio con rack, Negocios, Negocio con pestañas, Chips, Chip, Ajustes).
-6. Revisión con capturas a 390 y 1440 px de cada pantalla; tests, lint y despliegue.
+Cada pantalla se revisó con capturas a 390 y 1440 px y con una prueba de punta a punta en un Chrome
+real contra el Worker y el panel locales: fuentes y CSP sin errores, sin scroll lateral, cookies
+reales, formularios, el reloj y la consulta del canje en vivo, el mismo color del día en cliente y
+personal, y los menús del móvil.
+
+Para repetirlo en local, usa un estado aparte y el portal como segunda instancia (README):
+`wrangler d1 migrations apply nfc-scans --local --persist-to <carpeta>` y
+`wrangler dev --persist-to <carpeta>`. El panel guarda `index.html` en memoria al arrancar: tras
+recompilar hay que reiniciarlo.

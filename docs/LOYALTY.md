@@ -118,11 +118,13 @@ escanea su propio QR solo ve un aviso.
 
 ## 5b. La tarjeta de sellos (marketing)
 
-- Aspecto de **tarjeta física**: nombre e iniciales del negocio, cuadrícula de N espacios.
+- Un **pase de sellos** ([UI.md](UI.md)): cabecera con el sello y el nombre del negocio, contador,
+  cuadrícula de N espacios y un **talón perforado** con el premio.
 - Cada visita es un **sello de tinta** con las iniciales del negocio, girado como un sello real.
-- El último espacio es el **regalo 🎁**; el sello nuevo aparece con animación de **estampado**.
-- Barra de progreso y mensaje: _"¡+1 sello! Llevas 3 de 6. Te faltan 3 visitas"_.
-- Al completar: _"¡María, tu premio está listo!"_ en naranja con **confeti**.
+- El último espacio es el **premio**; el sello nuevo aparece con animación de **estampado**.
+- Mensaje arriba del pase: _"¡+1 sello! Llevas 3 de 6. Te faltan 3 visitas"_; la acción principal va
+  fija abajo, en la zona del pulgar.
+- Al completar: _"¡María, tu premio está listo!"_ con **confeti** y "Canjear mi premio" como acción.
 
 ## 6. Datos personales y privacidad
 

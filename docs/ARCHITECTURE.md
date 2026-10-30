@@ -3,7 +3,7 @@
 > Nombre provisional del repo: `nfc`. Reemplazar cuando haya nombre definitivo.
 >
 > Relacionados: [BUSINESS-ACCOUNTS.md](BUSINESS-ACCOUNTS.md) (cuentas de negocio, planos de
-> control y de datos, prueba de presencia) · [SECURITY.md](SECURITY.md) · [LOYALTY.md](LOYALTY.md).
+> control y de datos, prueba de presencia) · [SECURITY.md](SECURITY.md) · [LOYALTY.md](LOYALTY.md) · [UI.md](UI.md).
 
 ## 1. Objetivo
 

@@ -8,6 +8,7 @@ Plataforma NFC + QR para negocios locales. Ver [docs/ARCHITECTURE.md](docs/ARCHI
 | Portal de los negocios               | Mismo Worker en `negocios.penginexr.com`  | [BUSINESS-ACCOUNTS.md](docs/BUSINESS-ACCOUNTS.md) |
 | Panel admin                          | Raspberry Pi en `nfc-admin.penginexr.com` | [ARCHITECTURE.md](docs/ARCHITECTURE.md)           |
 | Seguridad y secretos                 | —                                         | [SECURITY.md](docs/SECURITY.md)                   |
+| Interfaz: disposición de cada página | Worker y panel                            | [UI.md](docs/UI.md)                               |
 
 Despliegue: cada push a `main` pasa los checks, aplica las migraciones D1 y despliega el Worker
 (con sus dos dominios); la imagen del panel se publica en GHCR y la Pi se actualiza a mano con
@@ -55,8 +56,11 @@ consola en lugar de enviarlo:
 cd apps/edge
 pnpm exec wrangler dev --local --port 8788 --host negocios.penginexr.com \
   --var INTERNAL_API_TOKEN:<el mismo> --var MAIL_DEV_LOG:true \
-  --var PORTAL_ORIGIN:http://127.0.0.1:8788 --var PUBLIC_ORIGIN:http://127.0.0.1:8787
+  --var PUBLIC_ORIGIN:http://127.0.0.1:8787
 ```
+
+No pongas `PORTAL_ORIGIN` en local: el Worker elige el portal comparando el host de la petición
+(que `--host` reescribe a `negocios.penginexr.com`) con esa variable, y no coincidirían.
 
 Crea la cuenta del dueño desde el panel local ("Acceso del dueño al portal") y pide el enlace
 en http://127.0.0.1:8788/entrar.

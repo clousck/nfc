@@ -133,14 +133,16 @@ escrituras y consultas.
 Dentro de la sesión, un dueño solo llega a **sus** negocios; cualquier otro responde como una
 página inexistente. Funciona sin JavaScript (las confirmaciones usan `<details>`).
 
-| Ruta                    | Qué hace                                                                     |
-| ----------------------- | ---------------------------------------------------------------------------- |
-| `/n/<id>`               | Chips y estado; etiqueta y destino (solo `https`); visitas del premio (2–20) |
-|                         | "Stand perdido o dañado": pausa el chip y te avisa por correo (una vez)      |
-| `/n/<id>/estadisticas`  | Las mismas cifras que `/r/<token>`, detrás de la sesión                      |
-| `/n/<id>/contactos.csv` | Solo contactos con permiso de promociones; cada descarga va a la auditoría   |
-| `/n/<id>/actividad`     | La auditoría en palabras: quién, qué, antes → después                        |
-| `/n/<id>/personal`      | Vincular y revocar los móviles del personal                                  |
+| Ruta                    | Qué hace                                                                   |
+| ----------------------- | -------------------------------------------------------------------------- |
+| `/n/<id>`               | "Hoy": franja del día, cifras de 30 días y visitas del premio (2–20)       |
+| `/n/<id>/chips`         | Chips y estado; etiqueta y destino (solo `https`)                          |
+| `/n/<id>/qr`            | "QR del día" (fidelidad activa) y cambiar su clave                         |
+|                         | "Stand perdido o dañado": pausa el chip y te avisa por correo (una vez)    |
+| `/n/<id>/estadisticas`  | Las mismas cifras que `/r/<token>`, detrás de la sesión                    |
+| `/n/<id>/contactos.csv` | Solo contactos con permiso de promociones; cada descarga va a la auditoría |
+| `/n/<id>/actividad`     | La auditoría en palabras: quién, qué, antes → después                      |
+| `/n/<id>/personal`      | Vincular y revocar los móviles del personal                                |
 
 Un chip de redirección no puede quedarse sin destino. Activar o desactivar la fidelidad sigue
 siendo del admin (es comercial); el dueño solo ajusta las visitas si ya está activa.
