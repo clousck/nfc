@@ -61,16 +61,15 @@ export function StaffDevices({ business }: { business: BusinessDetail }) {
           <ul className="list">
             {devices.data.devices.map((device) => (
               <li key={device.id} className="list-item">
-                <span className="truncate">
-                  {device.label}
-                  <span className="muted small">
-                    {' '}
-                    · {device.createdBy ?? 'admin'} ·{' '}
+                <div className="row-main">
+                  <strong className="truncate">{device.label}</strong>
+                  <span className="muted small truncate">
+                    {device.createdBy ?? 'admin'} ·{' '}
                     {device.lastUsedAt
                       ? `último uso ${formatDate(device.lastUsedAt)}`
                       : 'sin usar todavía'}
                   </span>
-                </span>
+                </div>
                 <button
                   type="button"
                   className="button button-small button-danger"

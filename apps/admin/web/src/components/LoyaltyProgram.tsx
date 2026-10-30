@@ -7,7 +7,7 @@ import { formatDate } from '../ui';
 const MIN_VISITS = 2;
 const MAX_VISITS = 20;
 
-/** Programa de fidelidad del negocio: visitas necesarias y tarjetas de sus clientes. */
+/** Pestaña Fidelidad: las tarjetas de los clientes y, en el carril, el ajuste del programa. */
 export function LoyaltyProgram({
   business,
   onChanged,
@@ -43,14 +43,24 @@ export function LoyaltyProgram({
   }
 
   return (
-    <section>
-      <h2>Programa de fidelidad</h2>
-      <form className="card form" onSubmit={submit}>
-        <p className="muted small loyalty-hint">
-          Los clientes suman 1 sello al día acercando el móvil a un chip en modo «Fidelidad». Al
-          completar las visitas, canjean el premio que el local anuncia en su cartel.
-        </p>
-        <div className="form-inline">
+    <div className="layout layout-rail-first">
+      {enabled ? (
+        <LoyaltyCards businessId={business.id} visits={business.loyaltyVisits!} />
+      ) : (
+        <section>
+          <h2>Tarjetas</h2>
+          <div className="empty">
+            Cuando actives el programa, aquí verás a cada cliente con sus sellos y su última visita.
+          </div>
+        </section>
+      )}
+      <section>
+        <h2>Programa de fidelidad</h2>
+        <form className="card form" onSubmit={submit}>
+          <p className="hint">
+            Los clientes suman 1 sello al día con un chip en modo «Fidelidad» o con el QR del día.
+            Al completar las visitas, canjean el premio que el local anuncia en su cartel.
+          </p>
           <label>
             Visitas para el premio
             <input
@@ -64,37 +74,38 @@ export function LoyaltyProgram({
               key={business.loyaltyVisits ?? 'off'}
             />
           </label>
-          <button type="submit" className="button button-primary" disabled={saving}>
-            {enabled ? 'Guardar' : 'Activar programa'}
-          </button>
-          {enabled && (
-            <button
-              type="button"
-              className="button"
-              disabled={saving}
-              onClick={() => {
-                if (
-                  confirm(
-                    '¿Desactivar el programa? Los chips de fidelidad irán directo a su destino. Las tarjetas se conservan.',
-                  )
-                ) {
-                  void save(null);
-                }
-              }}
-            >
-              Desactivar
-            </button>
+          {enabled && loyaltyChips === 0 && (
+            <p className="hint">
+              Ningún chip de este negocio está en modo «Fidelidad». Cámbialo en la configuración del
+              chip.
+            </p>
           )}
-        </div>
-        {enabled && loyaltyChips === 0 && (
-          <p className="hint">
-            Ningún chip de este negocio está en modo «Fidelidad». Cámbialo en la configuración del
-            chip.
-          </p>
-        )}
-      </form>
-      {enabled && <LoyaltyCards businessId={business.id} visits={business.loyaltyVisits!} />}
-    </section>
+          <div className="actions actions-start">
+            <button type="submit" className="button button-primary" disabled={saving}>
+              {enabled ? 'Guardar' : 'Activar programa'}
+            </button>
+            {enabled && (
+              <button
+                type="button"
+                className="button"
+                disabled={saving}
+                onClick={() => {
+                  if (
+                    confirm(
+                      '¿Desactivar el programa? Los chips de fidelidad irán directo a su destino. Las tarjetas se conservan.',
+                    )
+                  ) {
+                    void save(null);
+                  }
+                }}
+              >
+                Desactivar
+              </button>
+            )}
+          </div>
+        </form>
+      </section>
+    </div>
   );
 }
 
@@ -119,15 +130,31 @@ function LoyaltyCards({ businessId, visits }: { businessId: string; visits: numb
     }
   }
 
-  if (cards.error) return <div className="card card-warning">{cards.error.message}</div>;
-  if (!cards.data) return <p className="muted">Cargando tarjetas…</p>;
+  if (cards.error) {
+    return (
+      <section>
+        <h2>Tarjetas</h2>
+        <div className="card card-warning">{cards.error.message}</div>
+      </section>
+    );
+  }
+  if (!cards.data) {
+    return (
+      <section>
+        <h2>Tarjetas</h2>
+        <p className="muted">Cargando tarjetas…</p>
+      </section>
+    );
+  }
   const list = cards.data.cards;
   const withMarketing = list.filter((c) => c.marketing).length;
 
   return (
-    <div className="card">
-      <div className="section-title loyalty-head">
-        <h3>Tarjetas ({list.length})</h3>
+    <section>
+      <div className="section-title">
+        <h2>
+          Tarjetas <span className="tab-count">{list.length}</span>
+        </h2>
         {withMarketing > 0 && (
           <a
             className="button button-small"
@@ -138,9 +165,9 @@ function LoyaltyCards({ businessId, visits }: { businessId: string; visits: numb
         )}
       </div>
       {list.length === 0 ? (
-        <p className="muted">Todavía nadie se ha registrado.</p>
+        <div className="empty">Todavía nadie se ha registrado.</div>
       ) : (
-        <div className="table-wrap">
+        <div className="table-frame table-wrap">
           <table className="loyalty-table">
             <thead>
               <tr>
@@ -182,10 +209,10 @@ function LoyaltyCards({ businessId, visits }: { businessId: string; visits: numb
           </table>
         </div>
       )}
-      <p className="hint">
+      <p className="hint table-note">
         Los contactos solo incluyen a quienes aceptaron recibir promociones. Entrégaselos al negocio
         por un canal privado.
       </p>
-    </div>
+    </section>
   );
 }

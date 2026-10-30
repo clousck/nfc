@@ -73,7 +73,7 @@ export function BusinessPage() {
       {tab === '' && <Summary business={data} onAdd={() => setAdding(true)} />}
       {tab === 'fidelidad' && <LoyaltyProgram business={data} onChanged={business.reload} />}
       {tab === 'accesos' && (
-        <>
+        <div className="grid-2">
           <OwnerAccounts business={data} />
           {loyalty ? (
             <StaffDevices business={data} />
@@ -85,13 +85,13 @@ export function BusinessPage() {
               </div>
             </section>
           )}
-        </>
+        </div>
       )}
       {tab === 'estadisticas' && (
-        <>
-          <ReportLink business={data} onChanged={business.reload} />
+        <div className="layout layout-rail-first">
           <RateLimitIncidents businessId={data.id} />
-        </>
+          <ReportLink business={data} onChanged={business.reload} />
+        </div>
       )}
       {tab === 'datos' && (
         <>

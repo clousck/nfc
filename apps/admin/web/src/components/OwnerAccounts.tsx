@@ -84,17 +84,15 @@ export function OwnerAccounts({ business }: { business: BusinessDetail }) {
           <ul className="list">
             {accounts.data.accounts.map((account) => (
               <li key={account.id} className="list-item">
-                <span className="truncate">
-                  {account.name ? `${account.name} · ` : ''}
-                  {account.email}
-                  <span className="muted small">
-                    {' '}
-                    ·{' '}
+                <div className="row-main">
+                  <strong className="truncate">{account.name ?? account.email}</strong>
+                  <span className="muted small truncate">
+                    {account.name ? `${account.email} · ` : ''}
                     {account.lastLoginAt
                       ? `último acceso ${formatDate(account.lastLoginAt)}`
                       : 'nunca entró'}
                   </span>
-                </span>
+                </div>
                 <div className="actions">
                   <button
                     type="button"

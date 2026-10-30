@@ -76,7 +76,7 @@ export function HomePage() {
         </div>
       </dl>
 
-      <div className="layout home-layout">
+      <div className="layout layout-rail-first">
         <div>
           <section>
             <div className="section-title">
