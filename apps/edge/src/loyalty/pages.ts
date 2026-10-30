@@ -30,7 +30,7 @@ export function initials(name: string): string {
   const letters = (words.length > 1 ? [words[0], words[1]] : [words[0] ?? name])
     .map((w) => (w ?? '').charAt(0))
     .join('');
-  return letters.toUpperCase() || '★';
+  return letters.toUpperCase() || name.trim().charAt(0) || '?';
 }
 
 export function firstName(name: string | null): string {
@@ -39,12 +39,12 @@ export function firstName(name: string | null): string {
 
 /** Color del día: cambia cada día; el personal lo ve en su validador. */
 const DAY_COLORS = [
-  { name: 'Azul', hex: '#2a78d6' },
-  { name: 'Naranja', hex: '#eb6834' },
-  { name: 'Verde', hex: '#1f9d55' },
+  { name: 'Azul', hex: '#2672ce' },
+  { name: 'Naranja', hex: '#c94f1c' },
+  { name: 'Verde', hex: '#17804a' },
   { name: 'Morado', hex: '#6250d6' },
-  { name: 'Rosa', hex: '#d6407e' },
-  { name: 'Turquesa', hex: '#138a8a' },
+  { name: 'Rosa', hex: '#cc3a76' },
+  { name: 'Turquesa', hex: '#107c7c' },
   { name: 'Rojo', hex: '#d03b3b' },
 ] as const;
 
@@ -332,7 +332,7 @@ export function redemptionPage(input: {
     <p class="live-code">Código <span class="mono">${esc(formatRedemptionCode(input.code))}</span></p>
     <p class="muted" id="hint">${
       validated
-        ? `Confirmado por el local el ${esc(dateTime.format(new Date(input.validatedAt!)))}.`
+        ? `Confirmado por el local el ${esc(dateTime.format(new Date(input.validatedAt!)))}`
         : 'Muéstrale esta pantalla al cajero. Si el local lo pide, escaneará el QR para confirmarlo.'
     }</p>
     <p class="small muted">Canjeado el ${esc(dateTime.format(new Date(input.createdAt)))} · color de hoy: ${esc(input.color.name)}</p>
@@ -633,7 +633,7 @@ ${Array.from({ length: 14 }, (_, i) => `.confetti i:nth-child(${i + 1}){left:${(
 .verdict-do{font-size:18px}
 .verdict-meta{font-size:15px;opacity:.9}
 .dayband{background:var(--day);color:#fff;padding:20px 20px 18px}
-.dayband-label{font-size:15px;font-weight:600}
+.dayband-label{font-size:19px;font-weight:600}
 .dayband-name{font-size:36px;font-weight:600;line-height:1.1;letter-spacing:-.02em}
 .code-form .mono{font-size:18px;letter-spacing:.06em;text-transform:uppercase}
 .screen-wide{max-width:760px}

@@ -325,6 +325,7 @@ body.app{font-size:14px}
 .page-sub{margin-top:4px;font-size:15px;color:var(--muted)}
 .cols{display:grid;grid-template-columns:minmax(0,1fr) 340px;gap:24px;align-items:start}
 .cols-even{grid-template-columns:repeat(2,minmax(0,1fr))}
+@media (max-width:1180px){.cols:not(.cols-even){grid-template-columns:minmax(0,1fr)}}
 .block{display:grid;gap:10px;align-content:start;min-width:0}
 .block+.block{margin-top:24px}
 .block-head{display:flex;justify-content:space-between;align-items:baseline;gap:12px}
@@ -391,13 +392,14 @@ body.app{font-size:14px}
   .tabbar [aria-current]{color:var(--accent-ink);font-weight:500}
   .more{position:relative}
   .more-menu{position:absolute;right:4px;bottom:calc(100% + 10px);width:240px;display:grid;padding:6px;background:var(--sheet);border:1px solid var(--border);border-radius:12px;box-shadow:0 10px 30px rgba(19,20,22,.14)}
-  .more-menu a{padding:12px;border-radius:8px;color:var(--text);text-decoration:none;font-size:15px}
-  .more-menu a:hover{background:var(--raised)}
+  .tabbar .more-menu a{display:block;padding:12px;border-radius:8px;color:var(--text);text-decoration:none;font-size:15px;text-align:left}
+  .tabbar .more-menu a:hover{background:var(--raised)}
   .more-foot{display:flex;justify-content:space-between;gap:8px;padding:12px;border-top:1px solid var(--rule);font-size:13px;color:var(--muted)}
   .more-foot span{overflow:hidden;text-overflow:ellipsis}
-  .cols,.cols-even{grid-template-columns:1fr}
+  .cols,.cols-even{grid-template-columns:minmax(0,1fr)}
   .page-head{flex-direction:column;align-items:stretch}
   .page-head .btn{width:100%;min-height:48px}
+  .sheet .stack>.btn{justify-self:stretch;min-height:48px}
   .kpis{grid-template-columns:1fr 1fr;row-gap:18px}
   .kpis>div:nth-child(odd){padding-left:0;border-left:0}
   .today{grid-template-columns:1fr;gap:12px}

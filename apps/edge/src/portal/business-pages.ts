@@ -211,7 +211,7 @@ function loyaltyBlock(businessId: string, visits: number | null, s: LoyaltySumma
   <div class="panel pad">
     <dl class="kpis" style="--n:4">
       <div><dt>Sellos</dt><dd>${s.stamps30}</dd><p>visitas con sello</p></div>
-      <div><dt>Premios entregados</dt><dd>${s.redemptions30}</dd><p>${s.validated30} validados por tu personal</p></div>
+      <div><dt>Premios entregados</dt><dd>${s.redemptions30}</dd><p>${s.validated30} ${s.validated30 === 1 ? 'validado' : 'validados'} por tu personal</p></div>
       <div><dt>Tarjetas activas</dt><dd>${s.activeCards}</dd><p>de ${s.cards} creadas</p></div>
       <div><dt>Premio</dt><dd>${visits}<small>visitas</small></dd>
         <details><summary>Cambiar</summary>
@@ -235,8 +235,8 @@ function chipsBlock(businessId: string, tags: ProjectedTag[]): string {
       ? '<li class="muted">Todavía no tienes chips asignados.</li>'
       : tags
           .map(
-            (t) => `<li><span class="chip-no">#${t.number}</span>
-  <span class="chip-main"><strong>${t.label ? esc(t.label) : `Chip #${t.number}`}</strong><span>Chip #${t.number} · ${chipLine(t)}</span></span>
+            (t) => `<li><span class="chip-no" title="Chip #${t.number}">#${t.number}</span>
+  <span class="chip-main"><strong>${t.label ? esc(t.label) : `Chip #${t.number}`}</strong><span>${chipLine(t)}</span></span>
   ${status(t)}</li>`,
           )
           .join('');
@@ -325,7 +325,7 @@ function chipRow(businessId: string, tag: ProjectedTag): string {
         </label>`;
   const pause = tag.pausedAt
     ? `<form method="post" action="${action}/pausa" class="stack"><input type="hidden" name="accion" value="reactivar">
-        <p class="hint">Pausado el ${esc(fmt(tag.pausedAt))}. Si el stand vuelve a estar en su sitio, reactívalo.</p>
+        <p class="hint">Pausado el ${esc(fmt(tag.pausedAt))}: si el stand vuelve a estar en su sitio, reactívalo.</p>
         <button type="submit" class="btn">Reactivar chip</button></form>`
     : `<details class="lost"><summary>¿Se perdió o se dañó el stand?</summary>
         <form method="post" action="${action}/pausa" class="stack">
@@ -336,8 +336,8 @@ function chipRow(businessId: string, tag: ProjectedTag): string {
   return `<li class="chip">
   <details>
     <summary>
-      <span class="chip-no">#${tag.number}</span>
-      <span class="chip-main"><strong>${tag.label ? esc(tag.label) : `Chip #${tag.number}`}</strong><span>Chip #${tag.number} · ${chipLine(tag)}</span></span>
+      <span class="chip-no" title="Chip #${tag.number}">#${tag.number}</span>
+      <span class="chip-main"><strong>${tag.label ? esc(tag.label) : `Chip #${tag.number}`}</strong><span>${chipLine(tag)}</span></span>
       ${status(tag)}
       <span class="chip-edit">Editar</span>
     </summary>
@@ -568,7 +568,7 @@ export function pairingPage(input: {
     business: input.business,
     current: 'personal',
     loyalty: input.loyalty,
-    body: `${head(`Vincular «${esc(input.label)}»`, `Sirve una sola vez y caduca a las ${esc(timeOnly.format(new Date(input.pairing.expiresAt)))}.`)}
+    body: `${head(`Vincular «${esc(input.label)}»`, `Sirve una sola vez y caduca a las ${esc(timeOnly.format(new Date(input.pairing.expiresAt)))}`)}
 <div class="cols cols-even">
   <div class="panel pad qr-stage">
     <div class="qr-plate pair-qr">${qrSvg(input.pairing.url)}</div>
@@ -643,13 +643,16 @@ ${body}`,
 
 /** Estilos propios de estas páginas (el armazón y los bloques comunes están en pages.ts). */
 export const BUSINESS_STYLES = `
+.panel details>summary{margin-top:8px;color:var(--accent-ink);text-decoration:underline;text-underline-offset:3px}
+.panel details form{margin-top:12px}
+.block>.btn{justify-self:start}
 .chips{list-style:none;margin:0;padding:0}
 .chip+.chip{border-top:1px solid var(--rule)}
-.chip summary{display:grid;grid-template-columns:52px minmax(0,1fr) auto auto;align-items:center;gap:16px;padding:14px 20px;transition:background-color .15s}
-.chip summary:hover{background:var(--raised)}
-.chip details[open] summary{background:var(--raised)}
+.chip>details>summary{margin:0;color:inherit;text-decoration:none;display:grid;grid-template-columns:52px minmax(0,1fr) auto auto;align-items:center;gap:16px;padding:14px 20px;transition:background-color .15s}
+.chip>details>summary:hover{background:var(--raised)}
+.chip>details[open]>summary{background:var(--raised)}
 .chip-edit{color:var(--accent-ink);font-weight:500;font-size:13px}
-.chip details[open] .chip-edit{visibility:hidden}
+.chip>details[open] .chip-edit{visibility:hidden}
 .chip-body{padding:16px 20px 20px 88px;display:grid;gap:16px;max-width:640px}
 .lost summary{color:var(--accent-ink);font-size:13px;text-decoration:underline;text-underline-offset:3px}
 .lost form{margin-top:12px}
@@ -668,7 +671,8 @@ export const BUSINESS_STYLES = `
 .steps{margin:0;padding-left:20px;display:grid;gap:10px;font-size:15px}
 .cols .block+.block{margin-top:24px}
 @media (max-width:900px){
-  .chip summary{grid-template-columns:40px minmax(0,1fr) auto;padding:14px 16px}
+  .sheet .block>.btn{justify-self:stretch;min-height:48px}
+  .chip>details>summary{grid-template-columns:40px minmax(0,1fr) auto;padding:14px 16px}
   .chip-edit{display:none}
   .chip-body{padding:12px 16px 16px}
   .qr-stage{padding:20px}

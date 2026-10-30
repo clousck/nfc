@@ -58,6 +58,7 @@ a{color:var(--accent-ink);text-underline-offset:3px;text-decoration-thickness:1p
 .check{display:flex;align-items:flex-start;gap:10px;font-size:14px;font-weight:400}
 .check input{flex:none;width:18px;height:18px;margin:2px 0 0;accent-color:var(--accent)}
 .stack{display:grid;gap:16px}
+.stack>.btn:not(.btn-block){justify-self:start}
 .pill{display:inline-flex;align-items:center;height:22px;padding:0 9px;border-radius:999px;font-size:12px;font-weight:500;white-space:nowrap;flex:none;background:var(--active);color:#2f3537}
 .pill-ok{background:var(--positive-soft);color:var(--positive-ink)}
 .pill-warn{background:var(--warning-soft);color:var(--warning-ink)}

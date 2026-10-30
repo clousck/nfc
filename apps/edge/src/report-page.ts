@@ -130,7 +130,7 @@ function loyaltyPanel(l: ReportLoyalty): string {
   <dl class="r-figs">
     <div><dt>Tarjetas activas</dt><dd class="num">${n(s.activeCards)}</dd><p>de ${n(s.cards)} en total</p></div>
     <div><dt>Sellos</dt><dd class="num">${n(s.stamps30)}</dd><p>visitas con sello</p></div>
-    <div><dt>Premios canjeados</dt><dd class="num">${n(s.redemptions30)}</dd><p>${n(s.validated30)} validados</p></div>
+    <div><dt>Premios canjeados</dt><dd class="num">${n(s.redemptions30)}</dd><p>${n(s.validated30)} ${s.validated30 === 1 ? 'validado' : 'validados'}</p></div>
   </dl>
   <p class="hint">Para validar canjes, vincula el móvil de caja desde el portal de negocios (Personal).</p>
 </section>`;
