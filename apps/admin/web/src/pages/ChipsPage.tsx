@@ -1,25 +1,28 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useSearchParams } from 'react-router';
-import { api, type Business, type TagView } from '../api';
+import { Link, useNavigate, useSearchParams } from 'react-router';
+import { api, type Business } from '../api';
+import { host, TAG_STATE_LABEL, TAG_STATE_TONE, tagState } from '../chips';
 import { useResource } from '../hooks';
 import { useNotices } from '../notices';
-import { Badge, CopyButton, emptyToNull, LoadError, Loading, TagBadges } from '../ui';
+import { CopyButton, emptyToNull, LoadError, Loading, PageHead } from '../ui';
 
 const MAX_BATCH = 50;
 
-type Filter = 'todos' | 'libres' | 'ocupados';
+type Filter = 'todos' | 'libres' | 'ocupados' | 'pausados';
 
 const FILTERS: Array<{ value: Filter; label: string }> = [
   { value: 'todos', label: 'Todos' },
   { value: 'libres', label: 'Libres' },
-  { value: 'ocupados', label: 'Ocupados' },
+  { value: 'ocupados', label: 'En uso' },
+  { value: 'pausados', label: 'Pausados o sin destino' },
 ];
 
 function parseFilter(value: string | null): Filter {
-  return value === 'libres' || value === 'ocupados' ? value : 'todos';
+  return FILTERS.some((f) => f.value === value) ? (value as Filter) : 'todos';
 }
 
 export function ChipsPage() {
+  const navigate = useNavigate();
   const tags = useResource(() => api.listTags(), 'all-tags');
   const businesses = useResource(api.listBusinesses, 'businesses');
   const [params, setParams] = useSearchParams();
@@ -27,17 +30,9 @@ export function ChipsPage() {
   const [search, setSearch] = useState('');
 
   const names = new Map((businesses.data ?? []).map((b: Business) => [b.id, b.name]));
-  const all = tags.data ?? [];
-  const counts: Record<Filter, number> = {
-    todos: all.length,
-    libres: all.filter((t) => !t.businessId).length,
-    ocupados: all.filter((t) => t.businessId).length,
-  };
-
+  const all = [...(tags.data ?? [])].sort((a, b) => a.number - b.number);
   const term = search.trim().toLowerCase().replace(/^#/, '');
-  const visible = all.filter((tag) => {
-    if (filter === 'libres' && tag.businessId) return false;
-    if (filter === 'ocupados' && !tag.businessId) return false;
+  const matches = all.filter((tag) => {
     if (term === '') return true;
     const business = tag.businessId ? (names.get(tag.businessId) ?? '') : '';
     return (
@@ -47,14 +42,22 @@ export function ChipsPage() {
       business.toLowerCase().includes(term)
     );
   });
+  const inFilter = (f: Filter, tag: (typeof all)[number]) => {
+    const state = tagState(tag);
+    if (f === 'libres') return state === 'free';
+    if (f === 'ocupados') return state === 'live' || state === 'locked';
+    if (f === 'pausados') return state === 'paused' || state === 'missing' || state === 'off';
+    return true;
+  };
+  const visible = matches.filter((t) => inFilter(filter, t));
 
   return (
     <>
-      <div className="page-title">
-        <h1>Chips</h1>
-      </div>
-
-      <CreateBatchForm onCreated={tags.reload} />
+      <PageHead
+        title="Chips"
+        sub="El inventario físico: cada chip con su número, su negocio y su estado."
+        actions={<CreateBatchForm onCreated={tags.reload} />}
+      />
 
       <div className="tabs" role="tablist">
         {FILTERS.map((f) => (
@@ -66,73 +69,99 @@ export function ChipsPage() {
             className={`tab${filter === f.value ? ' tab-active' : ''}`}
             onClick={() => setParams(f.value === 'todos' ? {} : { ver: f.value })}
           >
-            {f.label} <span className="tab-count">{tags.data ? counts[f.value] : '…'}</span>
+            {f.label}
+            <span className="tab-count">
+              {tags.data ? matches.filter((t) => inFilter(f.value, t)).length : '…'}
+            </span>
           </button>
         ))}
       </div>
 
-      {all.length > 0 && (
+      <div className="toolbar">
         <input
-          className="input search"
+          className="input"
           type="search"
-          placeholder="Buscar por número, código, etiqueta o negocio"
+          placeholder="Número, código, etiqueta o negocio"
+          aria-label="Buscar chips"
           value={search}
           onChange={(e) => setSearch(e.target.value)}
         />
-      )}
+        <span className="small muted">
+          {visible.length} {visible.length === 1 ? 'chip' : 'chips'}
+        </span>
+      </div>
 
       {tags.error && <LoadError error={tags.error} retry={tags.reload} />}
       {tags.loading && !tags.data && <Loading />}
-      {tags.data && visible.length === 0 && (
-        <div className="card empty">
-          <p className="muted">
+      {tags.data &&
+        (visible.length === 0 ? (
+          <div className="empty">
             {term
               ? 'Ningún chip coincide con la búsqueda.'
               : filter === 'libres'
-                ? 'No hay chips libres. Crea algunos arriba.'
-                : filter === 'ocupados'
-                  ? 'Ningún chip está asignado todavía.'
-                  : 'Todavía no hay chips.'}
-          </p>
-        </div>
-      )}
-
-      <ul className="list">
-        {visible.map((tag) => (
-          <ChipRow
-            key={tag.slug}
-            tag={tag}
-            businessName={tag.businessId ? names.get(tag.businessId) : undefined}
-          />
+                ? 'No hay chips libres. Crea algunos con «Crear chips libres».'
+                : filter === 'todos'
+                  ? 'Todavía no hay chips.'
+                  : 'Ningún chip en este estado.'}
+          </div>
+        ) : (
+          <div className="table-frame table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Chip</th>
+                  <th className="hide-sm">Código</th>
+                  <th>Negocio</th>
+                  <th className="hide-sm">Destino</th>
+                  <th>Estado</th>
+                  <th className="hide-sm" aria-label="Acciones" />
+                </tr>
+              </thead>
+              <tbody>
+                {visible.map((tag) => {
+                  const state = tagState(tag);
+                  return (
+                    <tr key={tag.slug} onClick={() => navigate(`/chips/${tag.slug}`)}>
+                      <td className="ident">
+                        <strong>
+                          <Link to={`/chips/${tag.slug}`} onClick={(e) => e.stopPropagation()}>
+                            <span className="chip-no">#{tag.number}</span>
+                          </Link>
+                        </strong>
+                        <span>{tag.label ?? (tag.type === 'loyalty' ? 'Fidelidad' : '—')}</span>
+                      </td>
+                      <td className="hide-sm">
+                        <span className="chip-code">{tag.slug}</span>
+                      </td>
+                      <td className="truncate">
+                        {tag.businessId ? (
+                          (names.get(tag.businessId) ?? 'Negocio')
+                        ) : (
+                          <span className="muted">Libre</span>
+                        )}
+                      </td>
+                      <td className="truncate hide-sm">
+                        {tag.type === 'loyalty' ? 'Tarjeta de sellos' : ''}
+                        {tag.type === 'loyalty' && tag.targetUrl ? ' → ' : ''}
+                        {host(tag.targetUrl) ||
+                          (tag.type === 'loyalty' ? '' : <span className="muted">—</span>)}
+                      </td>
+                      <td>
+                        <span className={`badge badge-${TAG_STATE_TONE[state]}`}>
+                          {TAG_STATE_LABEL[state]}
+                        </span>
+                      </td>
+                      <td className="hide-sm cell-end" onClick={(e) => e.stopPropagation()}>
+                        <CopyButton text={tag.urls.nfc} label="Copiar URL" />
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
         ))}
-      </ul>
     </>
-  );
-}
-
-function ChipRow({ tag, businessName }: { tag: TagView; businessName: string | undefined }) {
-  return (
-    <li className="list-item">
-      <Link to={`/chips/${tag.slug}`} className="chip-main">
-        <div className="truncate">
-          <strong>#{tag.number}</strong> <code className="chip-code">{tag.slug}</code>
-          {tag.label && <span className="muted"> · {tag.label}</span>}
-        </div>
-        <div className="small truncate">
-          {tag.businessId ? (
-            <span>{businessName ?? 'Negocio'}</span>
-          ) : (
-            <span className="muted">Libre</span>
-          )}
-          {tag.targetUrl && <span className="muted"> → {tag.targetUrl}</span>}
-        </div>
-      </Link>
-      <div className="badges">
-        {!tag.businessId && <Badge tone="info">Libre</Badge>}
-        <TagBadges tag={tag} />
-        <CopyButton text={tag.urls.nfc} label="Copiar URL" />
-      </div>
-    </li>
   );
 }
 
@@ -163,9 +192,9 @@ function CreateBatchForm({ onCreated }: { onCreated: () => void }) {
   }
 
   return (
-    <form className="card form form-inline" onSubmit={submit}>
+    <form className="form-inline batch" onSubmit={submit}>
       <label>
-        Cantidad
+        <span className="small muted">Cantidad</span>
         <input
           className="input"
           name="count"
@@ -173,10 +202,11 @@ function CreateBatchForm({ onCreated }: { onCreated: () => void }) {
           min={1}
           max={MAX_BATCH}
           defaultValue={1}
+          aria-label="Cantidad de chips"
         />
       </label>
-      <label className="grow">
-        Etiqueta (opcional)
+      <label>
+        <span className="small muted">Etiqueta del lote</span>
         <input className="input" name="label" placeholder="Lote octubre" maxLength={80} />
       </label>
       <button type="submit" className="button button-primary" disabled={saving}>

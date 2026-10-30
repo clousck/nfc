@@ -27,7 +27,14 @@ const SCOPES: Record<string, string> = {
  * Veces que se superó un límite de peticiones (últimos 30 días). En modo observación
  * nadie fue bloqueado: sirve para ajustar los límites antes de activarlos.
  */
-export function RateLimitIncidents({ businessId }: { businessId?: string }) {
+export function RateLimitIncidents({
+  businessId,
+  title = 'Límites de peticiones',
+}: {
+  businessId?: string;
+  /** null: sin título propio (cuando la página ya lo pone). */
+  title?: string | null;
+}) {
   const incidents = useResource(
     () => (businessId ? api.getBusinessIncidents(businessId) : api.getIncidents()),
     `incidents:${businessId ?? '*'}`,
@@ -37,7 +44,7 @@ export function RateLimitIncidents({ businessId }: { businessId?: string }) {
   return (
     <section>
       <div className="section-title">
-        <h2>Límites de peticiones</h2>
+        {title ? <h2>{title}</h2> : <span />}
         <button
           type="button"
           className="button button-small"

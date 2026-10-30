@@ -1,98 +1,225 @@
 import { useState, type FormEvent } from 'react';
-import { Link, useNavigate, useParams } from 'react-router';
-import { api, type BusinessDetail, type Tag } from '../api';
+import { Link, NavLink, useNavigate, useParams } from 'react-router';
+import { api, type BusinessDetail } from '../api';
+import { host, TAG_STATE_LABEL, TAG_STATE_TONE, tagState } from '../chips';
 import { LoyaltyProgram } from '../components/LoyaltyProgram';
 import { OwnerAccounts } from '../components/OwnerAccounts';
 import { RateLimitIncidents } from '../components/RateLimitIncidents';
-import { StaffDevices } from '../components/StaffDevices';
 import { ReportLink } from '../components/ReportLink';
+import { StaffDevices } from '../components/StaffDevices';
 import { useResource } from '../hooks';
 import { useNotices } from '../notices';
 import {
+  BusinessStatusBadge,
+  ChipModeField,
+  Drawer,
   emptyToNull,
+  formatDate,
   LoadError,
   Loading,
-  TagBadges,
-  BusinessStatusBadge,
-  formatDate,
-  ChipModeField,
+  PageHead,
+  PLAN_LABELS,
+  STATUS_LABELS,
   type ChipMode,
 } from '../ui';
 
+const TABS = [
+  { key: '', label: 'Resumen' },
+  { key: 'fidelidad', label: 'Fidelidad' },
+  { key: 'accesos', label: 'Accesos' },
+  { key: 'estadisticas', label: 'Estadísticas' },
+  { key: 'datos', label: 'Datos' },
+] as const;
+
 export function BusinessPage() {
-  const { id = '' } = useParams();
+  const { id = '', tab = '' } = useParams();
   const business = useResource(() => api.getBusiness(id), `business:${id}`);
+  const [adding, setAdding] = useState(false);
 
   if (business.error) return <LoadError error={business.error} retry={business.reload} />;
   if (!business.data) return <Loading />;
   const data = business.data;
+  const loyalty = data.loyaltyVisits !== null;
 
   return (
     <>
-      <p className="breadcrumb">
-        <Link to="/">← Negocios</Link>
-      </p>
-      <div className="page-title">
-        <h1>{data.name}</h1>
-        <BusinessStatusBadge status={data.status} />
-      </div>
+      <PageHead
+        crumbs={<Link to="/negocios">Negocios</Link>}
+        title={data.name}
+        badges={<BusinessStatusBadge status={data.status} />}
+        sub={`${PLAN_LABELS[data.plan]} · ${data.tags.length} ${data.tags.length === 1 ? 'chip' : 'chips'} · ${
+          loyalty ? `fidelidad a las ${data.loyaltyVisits} visitas` : 'sin fidelidad'
+        }`}
+        actions={
+          <button type="button" className="button button-primary" onClick={() => setAdding(true)}>
+            Añadir chip
+          </button>
+        }
+      />
 
-      <section>
-        <h2>Chips ({data.tags.length})</h2>
-        {data.tags.length === 0 ? (
-          <p className="muted">Este negocio todavía no tiene chips.</p>
-        ) : (
-          <ul className="list">
-            {data.tags.map((tag) => (
-              <TagRow key={tag.slug} tag={tag} />
-            ))}
-          </ul>
-        )}
-        <AddTagForm businessId={data.id} onAdded={business.reload} />
-      </section>
+      <nav className="tabs" aria-label="Secciones del negocio">
+        {TABS.map((t) => (
+          <NavLink
+            key={t.key}
+            to={`/negocios/${data.id}${t.key ? `/${t.key}` : ''}`}
+            end
+            className={({ isActive }) => `tab${isActive ? ' tab-active' : ''}`}
+          >
+            {t.label}
+          </NavLink>
+        ))}
+      </nav>
 
-      <LoyaltyProgram business={data} onChanged={business.reload} />
+      {tab === '' && <Summary business={data} onAdd={() => setAdding(true)} />}
+      {tab === 'fidelidad' && <LoyaltyProgram business={data} onChanged={business.reload} />}
+      {tab === 'accesos' && (
+        <>
+          <OwnerAccounts business={data} />
+          {loyalty ? (
+            <StaffDevices business={data} />
+          ) : (
+            <section>
+              <h2>Móviles del personal</h2>
+              <div className="empty">
+                Se usan para validar los premios: actívalos con el programa de fidelidad.
+              </div>
+            </section>
+          )}
+        </>
+      )}
+      {tab === 'estadisticas' && (
+        <>
+          <ReportLink business={data} onChanged={business.reload} />
+          <RateLimitIncidents businessId={data.id} />
+        </>
+      )}
+      {tab === 'datos' && (
+        <>
+          <BusinessForm key={JSON.stringify(data)} business={data} onSaved={business.reload} />
+          <DeleteBusiness business={data} />
+        </>
+      )}
 
-      <OwnerAccounts business={data} />
-
-      {data.loyaltyVisits !== null && <StaffDevices business={data} />}
-
-      <ReportLink business={data} onChanged={business.reload} />
-
-      <RateLimitIncidents businessId={data.id} />
-
-      <BusinessForm key={JSON.stringify(data)} business={data} onSaved={business.reload} />
-      <DeleteBusiness business={data} />
+      {adding && (
+        <AddTagDrawer
+          businessId={data.id}
+          onClose={() => setAdding(false)}
+          onAdded={business.reload}
+        />
+      )}
     </>
   );
 }
 
-function TagRow({ tag }: { tag: Tag }) {
+function Summary({ business, onAdd }: { business: BusinessDetail; onAdd: () => void }) {
+  const navigate = useNavigate();
   return (
-    <li>
-      <Link to={`/chips/${tag.slug}`} className="list-item">
-        <div className="truncate">
-          <strong>#{tag.number}</strong> <code className="chip-code">{tag.slug}</code>
-          {tag.label && <span className="muted"> · {tag.label}</span>}
-          <div className="muted small truncate">
-            {tag.type === 'loyalty'
-              ? `Tarjeta de sellos${tag.targetUrl ? ` → ${tag.targetUrl}` : ''}`
-              : (tag.targetUrl ?? 'Sin destino')}
+    <div className="layout">
+      <section>
+        <h2>Chips</h2>
+        {business.tags.length === 0 ? (
+          <div className="empty">
+            Este negocio todavía no tiene chips.{' '}
+            <button type="button" className="button button-small" onClick={onAdd}>
+              Añadir el primero
+            </button>
           </div>
+        ) : (
+          <div className="table-frame table-wrap">
+            <table className="table">
+              <thead>
+                <tr>
+                  <th>Chip</th>
+                  <th className="hide-sm">Modo</th>
+                  <th>Destino</th>
+                  <th>Estado</th>
+                </tr>
+              </thead>
+              <tbody>
+                {business.tags.map((tag) => {
+                  const state = tagState(tag);
+                  return (
+                    <tr key={tag.slug} onClick={() => navigate(`/chips/${tag.slug}`)}>
+                      <td className="ident">
+                        <strong>
+                          <Link to={`/chips/${tag.slug}`} onClick={(e) => e.stopPropagation()}>
+                            <span className="chip-no">#{tag.number}</span>
+                            {tag.label ? ` ${tag.label}` : ''}
+                          </Link>
+                        </strong>
+                        <span className="chip-code">{tag.slug}</span>
+                      </td>
+                      <td className="hide-sm">
+                        {tag.type === 'loyalty' ? 'Tarjeta de sellos' : 'Redirección'}
+                      </td>
+                      <td className="truncate">
+                        {host(tag.targetUrl) || <span className="muted">—</span>}
+                      </td>
+                      <td>
+                        <span className={`badge badge-${TAG_STATE_TONE[state]}`}>
+                          {TAG_STATE_LABEL[state]}
+                        </span>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </section>
+      <section>
+        <div className="section-title">
+          <h2>Ficha</h2>
+          <Link to={`/negocios/${business.id}/datos`} className="small">
+            Editar
+          </Link>
         </div>
-        <div className="badges">
-          <TagBadges tag={tag} />
-        </div>
-      </Link>
-    </li>
+        <dl className="card facts">
+          <div>
+            <dt>Contacto</dt>
+            <dd>{business.contactName ?? '—'}</dd>
+          </div>
+          <div>
+            <dt>Teléfono</dt>
+            <dd>{business.phone ?? '—'}</dd>
+          </div>
+          <div>
+            <dt>Plan</dt>
+            <dd>{PLAN_LABELS[business.plan]}</dd>
+          </div>
+          <div>
+            <dt>Estado</dt>
+            <dd>{STATUS_LABELS[business.status]}</dd>
+          </div>
+          <div>
+            <dt>Alta</dt>
+            <dd>{formatDate(business.createdAt)}</dd>
+          </div>
+          {business.notes && (
+            <div className="facts-notes">
+              <dt>Notas</dt>
+              <dd>{business.notes}</dd>
+            </div>
+          )}
+        </dl>
+      </section>
+    </div>
   );
 }
 
-function AddTagForm({ businessId, onAdded }: { businessId: string; onAdded: () => void }) {
+function AddTagDrawer({
+  businessId,
+  onClose,
+  onAdded,
+}: {
+  businessId: string;
+  onClose: () => void;
+  onAdded: () => void;
+}) {
   const navigate = useNavigate();
   const { reportSync, reportError } = useNotices();
   const free = useResource(() => api.listTags({ unassigned: true }), 'free-tags');
-  const [open, setOpen] = useState(false);
   const [saving, setSaving] = useState(false);
   const [mode, setMode] = useState<ChipMode>('redirect');
 
@@ -119,63 +246,60 @@ function AddTagForm({ businessId, onAdded }: { businessId: string; onAdded: () =
     }
   }
 
-  if (!open) {
-    return (
-      <button type="button" className="button button-primary" onClick={() => setOpen(true)}>
-        + Añadir chip
-      </button>
-    );
-  }
-
   const freeTags = free.data ?? [];
   return (
-    <form className="card form" onSubmit={submit}>
-      <h3>Añadir chip</h3>
-      <label>
-        Chip
-        <select className="input" name="source" defaultValue="new">
-          <option value="new">Crear uno nuevo</option>
-          {freeTags.map((t) => (
-            <option key={t.slug} value={t.slug}>
-              Del inventario: #{t.number} · {t.slug}
-              {t.label ? ` (${t.label})` : ''}
-              {t.lockedAt ? ' · ya grabado' : ''}
-            </option>
-          ))}
-        </select>
-      </label>
-      <label>
-        Etiqueta
-        <input
-          className="input"
-          name="label"
-          placeholder="Caja principal, Mesa 3…"
-          maxLength={80}
-        />
-      </label>
-      <ChipModeField value={mode} onChange={setMode} />
-      <label>
-        {mode === 'loyalty' ? 'Destino después de la tarjeta (opcional)' : 'Destino'}
-        <input
-          className="input"
-          name="targetUrl"
-          type="url"
-          placeholder="https://g.page/r/…/review"
-          required={mode === 'redirect'}
-        />
-        <span className="hint">
-          Adonde lleva el chip: reseñas de Google, WhatsApp (https://wa.me/593…), Instagram, menú…
-        </span>
-      </label>
-      <div className="actions">
-        <button type="button" className="button" onClick={() => setOpen(false)} disabled={saving}>
-          Cancelar
-        </button>
-        <button type="submit" className="button button-primary" disabled={saving}>
-          {saving ? 'Guardando…' : 'Añadir'}
-        </button>
-      </div>
-    </form>
+    <Drawer
+      title="Añadir chip"
+      sub="Toma uno libre del inventario o crea uno nuevo."
+      onClose={onClose}
+    >
+      <form className="form" onSubmit={submit}>
+        <label>
+          Chip
+          <select className="input" name="source" defaultValue="new">
+            <option value="new">Crear uno nuevo</option>
+            {freeTags.map((t) => (
+              <option key={t.slug} value={t.slug}>
+                Del inventario: #{t.number} · {t.slug}
+                {t.label ? ` (${t.label})` : ''}
+                {t.lockedAt ? ' · ya grabado' : ''}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label>
+          Etiqueta
+          <input
+            className="input"
+            name="label"
+            placeholder="Caja principal, Mesa 3…"
+            maxLength={80}
+          />
+        </label>
+        <ChipModeField value={mode} onChange={setMode} />
+        <label>
+          {mode === 'loyalty' ? 'Destino después de la tarjeta (opcional)' : 'Destino'}
+          <input
+            className="input"
+            name="targetUrl"
+            type="url"
+            placeholder="https://g.page/r/…/review"
+            required={mode === 'redirect'}
+          />
+          <span className="hint">
+            Adonde lleva el chip: reseñas de Google, WhatsApp (https://wa.me/593…), Instagram, menú…
+          </span>
+        </label>
+        <div className="actions">
+          <button type="button" className="button" onClick={onClose} disabled={saving}>
+            Cancelar
+          </button>
+          <button type="submit" className="button button-primary" disabled={saving}>
+            {saving ? 'Guardando…' : 'Añadir'}
+          </button>
+        </div>
+      </form>
+    </Drawer>
   );
 }
 
@@ -207,11 +331,15 @@ function BusinessForm({ business, onSaved }: { business: BusinessDetail; onSaved
   }
 
   return (
-    <section>
-      <h2>Datos del negocio</h2>
+    <div className="setting">
+      <div className="setting-label">
+        <h2>Datos del negocio</h2>
+        <p>Pausado o cancelado: sus chips muestran la página genérica.</p>
+        <p>Alta: {formatDate(business.createdAt)}</p>
+      </div>
       <form className="card form" onSubmit={submit}>
         <label>
-          Nombre *
+          Nombre
           <input
             className="input"
             name="name"
@@ -245,23 +373,19 @@ function BusinessForm({ business, onSaved }: { business: BusinessDetail; onSaved
               <option value="paused">Pausado</option>
               <option value="cancelled">Cancelado</option>
             </select>
-            <span className="hint">
-              Pausado o cancelado: sus chips muestran la página genérica.
-            </span>
           </label>
         </div>
         <label>
           Notas
           <textarea className="input" name="notes" rows={3} defaultValue={business.notes ?? ''} />
         </label>
-        <p className="muted small">Creado: {formatDate(business.createdAt)}</p>
         <div className="actions">
           <button type="submit" className="button button-primary" disabled={saving}>
             {saving ? 'Guardando…' : 'Guardar cambios'}
           </button>
         </div>
       </form>
-    </section>
+    </div>
   );
 }
 
@@ -269,28 +393,34 @@ function DeleteBusiness({ business }: { business: BusinessDetail }) {
   const navigate = useNavigate();
   const { notify, reportError } = useNotices();
 
-  if (business.tags.length > 0) {
-    return (
-      <p className="muted small">
-        Para borrar este negocio primero libera sus chips, o márcalo como cancelado.
-      </p>
-    );
-  }
-
   async function remove() {
     if (!confirm(`¿Borrar "${business.name}"? No se puede deshacer.`)) return;
     try {
       await api.deleteBusiness(business.id);
       notify('success', 'Negocio borrado.');
-      navigate('/');
+      navigate('/negocios');
     } catch (err) {
       reportError(err);
     }
   }
 
   return (
-    <button type="button" className="button button-danger" onClick={remove}>
-      Borrar negocio
-    </button>
+    <div className="setting">
+      <div className="setting-label">
+        <h2>Borrar negocio</h2>
+        <p>No se puede deshacer.</p>
+      </div>
+      <div className="card">
+        {business.tags.length > 0 ? (
+          <p className="muted">
+            Para borrar este negocio primero libera sus chips, o márcalo como cancelado.
+          </p>
+        ) : (
+          <button type="button" className="button button-danger" onClick={() => void remove()}>
+            Borrar «{business.name}»
+          </button>
+        )}
+      </div>
+    </div>
   );
 }

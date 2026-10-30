@@ -88,7 +88,7 @@ export function StaffDevices({ business }: { business: BusinessDetail }) {
           <div className="card card-info">
             <p className="small">
               Enlace para vincular <strong>{pairing.label}</strong>: ábrelo en ese móvil antes del{' '}
-              {formatDate(pairing.expiresAt)}. Sirve una sola vez.
+              {formatDate(pairing.expiresAt)}: sirve una sola vez.
             </p>
             <div className="url-box">
               <code className="truncate">{pairing.url}</code>

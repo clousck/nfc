@@ -145,7 +145,7 @@ function LoyaltyCards({ businessId, visits }: { businessId: string; visits: numb
             <thead>
               <tr>
                 <th>Cliente</th>
-                <th>Sellos</th>
+                <th className="num">Sellos</th>
                 <th>Última visita</th>
                 <th>Promos</th>
                 <th aria-label="Acciones" />
@@ -158,7 +158,7 @@ function LoyaltyCards({ businessId, visits }: { businessId: string; visits: numb
                     <strong>{card.name}</strong>
                     <div className="muted small">{card.phone}</div>
                   </td>
-                  <td>
+                  <td className="num">
                     {card.stamps}/{visits}
                     {card.expired && <div className="muted small">caducada</div>}
                     {card.redemptions > 0 && (
@@ -166,7 +166,7 @@ function LoyaltyCards({ businessId, visits }: { businessId: string; visits: numb
                     )}
                   </td>
                   <td className="small">{formatDate(card.lastVisitAt)}</td>
-                  <td>{card.marketing ? '✓' : '—'}</td>
+                  <td>{card.marketing ? 'Sí' : '—'}</td>
                   <td>
                     <button
                       type="button"

@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router';
 import { api, qrUrl, type Business, type TagView } from '../api';
+import { TAG_STATE_LABEL, TAG_STATE_TONE, tagState } from '../chips';
 import { NfcWriter } from '../components/NfcWriter';
 import { ScanStats } from '../components/ScanStats';
 import { useResource } from '../hooks';
@@ -12,7 +13,7 @@ import {
   formatDate,
   LoadError,
   Loading,
-  TagBadges,
+  PageHead,
   type ChipMode,
 } from '../ui';
 
@@ -25,108 +26,118 @@ export function TagPage() {
   if (!tag.data) return <Loading />;
   const data = tag.data;
   const owner = businesses.data?.find((b) => b.id === data.businessId);
+  const state = tagState(data);
 
   return (
     <>
-      <p className="breadcrumb">
-        {owner ? (
-          <Link to={`/negocios/${owner.id}`}>← {owner.name}</Link>
-        ) : (
-          <Link to="/chips?ver=libres">← Chips libres</Link>
-        )}
-      </p>
-      <div className="page-title">
-        <h1>
-          Chip #{data.number}
-          {data.label && <span className="muted"> · {data.label}</span>}
-        </h1>
-        <div className="badges">
-          <TagBadges tag={data} />
-        </div>
-      </div>
+      <PageHead
+        crumbs={
+          owner ? (
+            <>
+              <Link to="/negocios">Negocios</Link>
+              <span>/</span>
+              <Link to={`/negocios/${owner.id}`}>{owner.name}</Link>
+            </>
+          ) : (
+            <Link to="/chips?ver=libres">Chips libres</Link>
+          )
+        }
+        title={
+          <>
+            Chip #{data.number}
+            {data.label && <span className="muted"> · {data.label}</span>}
+          </>
+        }
+        badges={
+          <>
+            <span className={`badge badge-${TAG_STATE_TONE[state]}`}>{TAG_STATE_LABEL[state]}</span>
+            {data.type === 'loyalty' && <span className="badge badge-info">Fidelidad</span>}
+          </>
+        }
+        sub={
+          <>
+            Código <span className="chip-code">{data.slug}</span> · creado{' '}
+            {formatDate(data.createdAt)} · publicado {formatDate(data.syncedAt)}
+          </>
+        }
+      />
 
       {data.pausedAt && <PausedNotice tag={data} onChanged={tag.reload} />}
-
-      {data.businessId && !data.published && (
+      {data.businessId && !data.published && !data.pausedAt && (
         <div className="card card-warning">
           Este chip no redirige a ningún lado todavía: falta el destino.
         </div>
       )}
 
-      {data.type === 'loyalty' ? (
-        <section className="card">
-          <h2>Para grabar</h2>
-          <UrlLine
-            title="URL del chip NFC"
-            hint="Esta es la que se graba en el chip."
-            url={data.urls.nfc}
-          />
-          <p className="hint">
-            Los chips de fidelidad no tienen QR: con la URL del QR cualquiera podría sumar sellos
-            sin ir al local.
-          </p>
-        </section>
-      ) : (
-        <div className="grid-2">
-          <section className="card">
-            <h2>Para grabar e imprimir</h2>
-            <UrlLine
-              title="URL del chip NFC"
-              hint="Esta es la que se graba en el chip."
-              url={data.urls.nfc}
+      <div className="layout">
+        <div>
+          {/* El selector de negocio necesita la lista cargada: si se dibujara vacío quedaría en
+              "Sin asignar" y al guardar desasignaría el chip. */}
+          {businesses.data ? (
+            <TagForm
+              key={JSON.stringify(data)}
+              tag={data}
+              businesses={businesses.data}
+              onSaved={tag.reload}
             />
-            <UrlLine
-              title="URL del código QR"
-              hint="Lleva ?s=q para contar los escaneos por QR aparte."
-              url={data.urls.qr}
-            />
-          </section>
-
-          <section className="card qr-card">
-            <h2>Código QR</h2>
-            <img src={qrUrl(data.slug, 'svg')} alt={`Código QR de ${data.slug}`} className="qr" />
-            <div className="actions">
-              <a className="button button-small" href={qrUrl(data.slug, 'svg', true)}>
-                Descargar SVG
-              </a>
-              <a className="button button-small" href={qrUrl(data.slug, 'png', true)}>
-                Descargar PNG
-              </a>
-            </div>
-            <p className="hint">SVG para imprenta (no pierde calidad), PNG para todo lo demás.</p>
-          </section>
+          ) : businesses.error ? (
+            <LoadError error={businesses.error} retry={businesses.reload} />
+          ) : (
+            <Loading />
+          )}
+          <NfcWriter tag={data} onLocked={tag.reload} />
+          <ScanStats tag={data} businessName={owner?.name} />
         </div>
-      )}
 
-      <NfcWriter tag={data} onLocked={tag.reload} />
-
-      <ScanStats tag={data} businessName={owner?.name} />
-
-      {/* El selector de negocio necesita la lista cargada: si se dibujara vacío quedaría en
-          "Sin asignar" y al guardar desasignaría el chip. */}
-      {businesses.data ? (
-        <TagForm
-          key={JSON.stringify(data)}
-          tag={data}
-          businesses={businesses.data}
-          onSaved={tag.reload}
-        />
-      ) : businesses.error ? (
-        <LoadError error={businesses.error} retry={businesses.reload} />
-      ) : (
-        <Loading />
-      )}
-      <TagDangerZone tag={data} onChanged={tag.reload} />
+        <div>
+          {data.type === 'loyalty' ? (
+            <section>
+              <h2>Para grabar</h2>
+              <div className="card">
+                <UrlLine title="URL del chip NFC" url={data.urls.nfc} />
+                <p className="hint">
+                  Los chips de fidelidad no tienen QR fijo: con esa URL cualquiera podría sumar
+                  sellos sin ir al local. Para sellar por QR, el local muestra el QR del día.
+                </p>
+              </div>
+            </section>
+          ) : (
+            <section>
+              <h2>Para grabar e imprimir</h2>
+              <div className="card qr-card">
+                <img
+                  src={qrUrl(data.slug, 'svg')}
+                  alt={`Código QR del chip ${data.number}`}
+                  className="qr"
+                />
+                <div className="actions">
+                  <a className="button button-small" href={qrUrl(data.slug, 'svg', true)}>
+                    SVG para imprenta
+                  </a>
+                  <a className="button button-small" href={qrUrl(data.slug, 'png', true)}>
+                    PNG
+                  </a>
+                </div>
+              </div>
+              <div className="card">
+                <UrlLine title="URL del chip NFC" url={data.urls.nfc} />
+                <UrlLine title="URL del código QR (cuenta aparte)" url={data.urls.qr} />
+              </div>
+            </section>
+          )}
+          <TagDangerZone tag={data} onChanged={tag.reload} />
+        </div>
+      </div>
     </>
   );
 }
 
-function UrlLine({ title, hint, url }: { title: string; hint: string; url: string }) {
+function UrlLine({ title, url }: { title: string; url: string }) {
   return (
     <div className="url-line">
-      <div className="small">
-        <strong>{title}</strong> <span className="muted">— {hint}</span>
-      </div>
+      <p className="small">
+        <strong>{title}</strong>
+      </p>
       <div className="url-box">
         <code className="truncate">{url}</code>
         <CopyButton text={url} />
@@ -191,27 +202,29 @@ function TagForm({
     <section>
       <h2>Configuración</h2>
       <form className="card form" onSubmit={submit}>
-        <label>
-          Negocio
-          <select className="input" name="businessId" defaultValue={tag.businessId ?? ''}>
-            <option value="">— Sin asignar (chip libre) —</option>
-            {businesses.map((b) => (
-              <option key={b.id} value={b.id}>
-                {b.name}
-              </option>
-            ))}
-          </select>
-        </label>
-        <label>
-          Etiqueta
-          <input
-            className="input"
-            name="label"
-            defaultValue={tag.label ?? ''}
-            placeholder="Caja principal, Mesa 3…"
-            maxLength={80}
-          />
-        </label>
+        <div className="row">
+          <label>
+            Negocio
+            <select className="input" name="businessId" defaultValue={tag.businessId ?? ''}>
+              <option value="">— Sin asignar (chip libre) —</option>
+              {businesses.map((b) => (
+                <option key={b.id} value={b.id}>
+                  {b.name}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label>
+            Etiqueta
+            <input
+              className="input"
+              name="label"
+              defaultValue={tag.label ?? ''}
+              placeholder="Caja principal, Mesa 3…"
+              maxLength={80}
+            />
+          </label>
+        </div>
         <ChipModeField value={mode} onChange={setMode} />
         <label>
           {mode === 'loyalty' ? 'Destino después de la tarjeta (opcional)' : 'Destino'}
@@ -230,11 +243,6 @@ function TagForm({
           <input type="checkbox" name="active" defaultChecked={tag.active} />
           Activo (si lo desactivas, muestra la página genérica)
         </label>
-        <p className="muted small">
-          Código interno: <code>{tag.slug}</code> · Creado: {formatDate(tag.createdAt)} · Publicado
-          en Cloudflare: {formatDate(tag.syncedAt)}
-          {tag.lockedAt ? ` · Bloqueado: ${formatDate(tag.lockedAt)}` : ''}
-        </p>
         <div className="actions">
           <button type="submit" className="button button-primary" disabled={saving}>
             {saving ? 'Guardando…' : 'Guardar cambios'}
@@ -277,24 +285,27 @@ function TagDangerZone({ tag, onChanged }: { tag: TagView; onChanged: () => void
     }
   }
 
-  if (tag.lockedAt) {
-    return (
-      <p className="muted small">
-        Este chip ya está grabado y bloqueado. Si el negocio lo deja, desactívalo o reasígnalo a
-        otro.
-      </p>
-    );
-  }
-
   return (
-    <div className="actions actions-start">
-      <button type="button" className="button" onClick={lock}>
-        Ya lo bloqueé con otra app
-      </button>
-      <button type="button" className="button button-danger" onClick={remove}>
-        Borrar chip
-      </button>
-    </div>
+    <section>
+      <h2>Zona de peligro</h2>
+      <div className="card">
+        {tag.lockedAt ? (
+          <p className="muted">
+            Grabado y bloqueado el {formatDate(tag.lockedAt)}: si el negocio lo deja, desactívalo o
+            reasígnalo a otro.
+          </p>
+        ) : (
+          <div className="actions actions-start">
+            <button type="button" className="button" onClick={() => void lock()}>
+              Ya lo bloqueé con otra app
+            </button>
+            <button type="button" className="button button-danger" onClick={() => void remove()}>
+              Borrar chip
+            </button>
+          </div>
+        )}
+      </div>
+    </section>
   );
 }
 
@@ -317,7 +328,7 @@ function PausedNotice({ tag, onChanged }: { tag: TagView; onChanged: () => void 
   }
 
   return (
-    <div className="card card-warning">
+    <div className="card card-warning notice-row">
       <p>
         El negocio pausó este chip ({tag.pausedAt ? formatDate(tag.pausedAt) : ''}): stand perdido o
         dañado. Muestra "Enlace no disponible" hasta que se reactive.

@@ -122,7 +122,7 @@ export function OwnerAccounts({ business }: { business: BusinessDetail }) {
           <div className="card card-info">
             <p className="small">
               Enlace para <strong>{link.email}</strong>: sirve una sola vez y caduca el{' '}
-              {formatDate(link.expiresAt)}. Envíaselo solo a esa persona.
+              {formatDate(link.expiresAt)}: envíaselo solo a esa persona.
             </p>
             <div className="url-box">
               <code className="truncate">{link.url}</code>

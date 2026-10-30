@@ -29,7 +29,7 @@ export function NfcWriter({ tag, onLocked }: { tag: TagView; onLocked: () => voi
         <h2>Grabar el chip</h2>
         <div className="card">
           <p>
-            🔒 Este chip ya está <strong>grabado y bloqueado</strong>. Si un día necesitas otro
+            Este chip ya está <strong>grabado y bloqueado</strong>. Si un día necesitas otro
             destino, cámbialo abajo: el chip no hace falta tocarlo.
           </p>
         </div>
@@ -107,7 +107,7 @@ export function NfcWriter({ tag, onLocked }: { tag: TagView; onLocked: () => voi
       <div className="card nfc">
         {step === 'locked' ? (
           <p>
-            🔒 Este chip ya está <strong>grabado y bloqueado</strong>. Si un día necesitas otro
+            Este chip ya está <strong>grabado y bloqueado</strong>. Si un día necesitas otro
             destino, cámbialo abajo: el chip no hace falta tocarlo.
           </p>
         ) : (
@@ -169,8 +169,8 @@ export function NfcWriter({ tag, onLocked }: { tag: TagView; onLocked: () => voi
           </div>
         )}
         {error && <div className="card card-warning nfc-error">{error}</div>}
-        {step === 'written' && !error && <p className="nfc-ok">✓ Grabado. Ahora compruébalo.</p>}
-        {step === 'verified' && <p className="nfc-ok">✓ El chip tiene la URL correcta.</p>}
+        {step === 'written' && !error && <p className="nfc-ok">Grabado. Ahora compruébalo.</p>}
+        {step === 'verified' && <p className="nfc-ok">El chip tiene la URL correcta.</p>}
       </div>
     </section>
   );
